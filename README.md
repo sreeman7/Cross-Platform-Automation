@@ -2,6 +2,17 @@
 
 Automated social media distribution system that takes Instagram Reels, processes videos, generates AI captions, and publishes to TikTok.
 
+## Project Pitch
+
+Cross-Platform-Automation is a portfolio-grade full-stack system that automates short-form video distribution from Instagram Reels to TikTok. It combines a FastAPI backend, Celery workers, and a React dashboard to deliver an end-to-end pipeline: ingest URL -> process media -> generate AI caption -> publish -> track status in real time.
+
+Why this stands out for internships:
+
+- Demonstrates backend architecture (API + async workers + persistence)
+- Uses real cloud integrations (Supabase/PostgreSQL, Cloudflare R2, Upstash Redis)
+- Implements external API workflows (OpenAI and TikTok OAuth/content posting)
+- Ships with CI, deployment configuration, and production-oriented error handling
+
 ## Current Status
 
 This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, and Phase 8 implementations:
@@ -253,6 +264,27 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
    - `dist`
 5. Add env var:
    - `VITE_API_URL=https://your-backend-domain`
+
+## Screenshots
+
+Add screenshots after capture (recommended filenames):
+
+- `docs/screenshots/dashboard-overview.png`
+- `docs/screenshots/upload-form-and-queue.png`
+- `docs/screenshots/job-timeline-expanded.png`
+- `docs/screenshots/swagger-endpoints.png`
+- `docs/screenshots/tiktok-connect-flow.png`
+
+Capture checklist is available in:
+
+- `docs/screenshots/README.md`
+
+## Demo
+
+- 2-3 minute recording script:
+  - `docs/DEMO_SCRIPT.md`
+- Slide structure for project presentation:
+  - `docs/SLIDE_OUTLINE.md`
 
 ## License
 
