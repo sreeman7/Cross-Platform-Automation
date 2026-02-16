@@ -4,13 +4,14 @@ Automated social media distribution system that takes Instagram Reels, processes
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 implementations:
+This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, and Phase 7 implementations:
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
 - Celery worker and Redis-backed task queue with per-step job tracking
 - Service modules for Instagram download (Instaloader-based), video processing, real R2 storage upload/download, AI captions, and TikTok OAuth/upload
 - React + Tailwind dashboard for submitting URLs and monitoring processing status
+- Frontend TikTok connect flow, OAuth callback handling, and per-video job timeline view
 - Initial pytest test suite
 - Docker and docker-compose setup
 
@@ -174,6 +175,17 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
   - upload initialization + binary upload calls
 - Dev-mode option:
   - `TIKTOK_MOCK_MODE=True` keeps local development/testing unblocked without live TikTok credentials.
+
+## Phase 7 Frontend Notes
+
+- Dashboard now includes:
+  - TikTok account connection card (`Connect TikTok` / `Reconnect`)
+  - OAuth callback handling from query params (`code`, `state`)
+  - per-video job timeline drawer fed by `GET /api/videos/{id}/jobs`
+  - improved error visibility for API failures
+- Frontend API client now includes methods for:
+  - TikTok auth URL, callback exchange, account status
+  - per-video jobs retrieval
 
 ## License
 
