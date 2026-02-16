@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -71,12 +72,16 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
             tmp_dir = Path(tmp)
 
             _update_video_status(db, video, "downloading")
-            source_path = __import__("asyncio").run(
-                instagram_service.download_video(video.instagram_url, tmp_dir / str(video_id))
+            download_result = asyncio.run(
+                instagram_service.download_video_with_metadata(video.instagram_url, tmp_dir / str(video_id))
             )
+            source_path = download_result.video_path
+            video.instagram_media_id = download_result.media_id
+            db.add(video)
+            db.commit()
 
             _update_video_status(db, video, "processing")
-            processed_path = __import__("asyncio").run(
+            processed_path = asyncio.run(
                 processor.process_video(source_path, tmp_dir / str(video_id))
             )
             video.local_path = str(processed_path)
@@ -85,16 +90,16 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
 
             _update_video_status(db, video, "uploading")
             storage_key = f"videos/{video_id}/processed.mp4"
-            storage_url = __import__("asyncio").run(storage_service.upload_file(processed_path, storage_key))
+            storage_url = asyncio.run(storage_service.upload_file(processed_path, storage_key))
             video.storage_url = storage_url
 
-            caption, hashtags = __import__("asyncio").run(
+            caption, hashtags = asyncio.run(
                 ai_service.generate_caption_and_tags(context_hint=video.instagram_url)
             )
             video.caption = caption
             video.hashtags = hashtags
 
-            tiktok_url, tiktok_video_id = __import__("asyncio").run(
+            tiktok_url, tiktok_video_id = asyncio.run(
                 tiktok_service.upload_video(processed_path, caption)
             )
             video.tiktok_url = tiktok_url

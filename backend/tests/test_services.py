@@ -2,7 +2,9 @@
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
 from app.services.ai_service import AIService
 from app.services.instagram_service import InstagramService
 from app.services.storage_service import StorageService
@@ -36,13 +38,35 @@ def test_storage_service_returns_url(tmp_path: Path) -> None:
     assert url.startswith("http")
 
 
-def test_instagram_and_tiktok_stubs(tmp_path: Path) -> None:
+def test_instagram_download_with_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     instagram = InstagramService()
+
+    def fake_get_post(shortcode: str) -> SimpleNamespace:
+        assert shortcode == "ABC123"
+        return SimpleNamespace(is_video=True, video_url="https://cdn.example.com/mock.mp4", mediaid=987654)
+
+    async def fake_download(video_url: str, output_path: Path) -> None:
+        assert video_url.endswith(".mp4")
+        output_path.write_bytes(b"video")
+
+    monkeypatch.setattr(instagram, "_get_post_by_shortcode", fake_get_post)
+    monkeypatch.setattr(instagram, "_download_video_file", fake_download)
+
+    result = asyncio.run(instagram.download_video_with_metadata("https://www.instagram.com/reel/ABC123/", tmp_path))
+    assert result.video_path.exists()
+    assert result.media_id == "987654"
+
+
+def test_instagram_invalid_url_raises(tmp_path: Path) -> None:
+    instagram = InstagramService()
+    with pytest.raises(Exception):
+        asyncio.run(instagram.download_video("https://www.youtube.com/watch?v=demo", tmp_path))
+
+
+def test_tiktok_stub_upload(tmp_path: Path) -> None:
     tiktok = TikTokService()
-
-    downloaded = asyncio.run(instagram.download_video("https://www.instagram.com/reel/ABC123/", tmp_path))
-    assert downloaded.exists()
-
-    tiktok_url, tiktok_id = asyncio.run(tiktok.upload_video(downloaded, "caption"))
+    video_path = tmp_path / "clip.mp4"
+    video_path.write_bytes(b"video")
+    tiktok_url, tiktok_id = asyncio.run(tiktok.upload_video(video_path, "caption"))
     assert "tiktok.com" in tiktok_url
     assert tiktok_id

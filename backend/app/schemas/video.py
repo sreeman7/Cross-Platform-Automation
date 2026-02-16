@@ -2,13 +2,27 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 
 class VideoCreate(BaseModel):
     """Payload for creating a new video-processing request."""
 
     instagram_url: HttpUrl
+
+    @field_validator("instagram_url")
+    @classmethod
+    def validate_instagram_url(cls, value: HttpUrl) -> HttpUrl:
+        """Restrict submissions to supported Instagram media URLs."""
+
+        if "instagram.com" not in value.host:
+            raise ValueError("URL must be on instagram.com")
+
+        parts = [part for part in value.path.split("/") if part]
+        if len(parts) < 2 or parts[0] not in {"reel", "p", "tv"}:
+            raise ValueError("URL must be an Instagram reel/post/tv link")
+
+        return value
 
 
 class VideoUpdate(BaseModel):

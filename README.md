@@ -4,12 +4,12 @@ Automated social media distribution system that takes Instagram Reels, processes
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus pipeline scaffolding:
+This repository now includes a complete Phase 1 foundation plus Phase 2 Instagram download implementation:
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
 - Celery worker and Redis-backed task queue wiring
-- Service modules for Instagram download, video processing, R2 upload, AI captions, and TikTok upload
+- Service modules for Instagram download (Instaloader-based), video processing, R2 upload, AI captions, and TikTok upload
 - React + Tailwind dashboard for submitting URLs and monitoring processing status
 - Initial pytest test suite
 - Docker and docker-compose setup
@@ -115,11 +115,11 @@ docker compose up --build
 
 ## Notes on Integrations
 
-Current external integration modules are scaffolded with deterministic placeholder behavior so you can run the pipeline end-to-end locally before adding real credentials.
+Instagram download now uses real shortcode parsing and Instaloader post resolution, then downloads media bytes with retries. Storage/AI/TikTok modules are still scaffolded placeholders for later phases.
 
 ## Next Milestones
 
-1. Replace Instagram/TikTok/AI/storage stubs with production API clients.
+1. Replace TikTok/AI/storage stubs with production API clients.
 2. Add Alembic migrations for managed schema changes.
 3. Add auth, richer analytics, and stronger test coverage.
 4. Deploy backend + worker to Railway and frontend to Vercel.

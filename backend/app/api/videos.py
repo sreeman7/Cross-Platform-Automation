@@ -1,6 +1,7 @@
 """Video CRUD and statistics endpoints."""
 
 from collections import Counter
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from app.schemas.video import StatsSummary, VideoCreate, VideoListItem, VideoRes
 from app.workers.tasks import process_pipeline_task
 
 router = APIRouter(prefix="/api", tags=["videos"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/videos/", response_model=VideoResponse, status_code=status.HTTP_201_CREATED)
@@ -22,13 +24,16 @@ def create_video(payload: VideoCreate, db: Session = Depends(get_db)) -> Video:
     db.commit()
     db.refresh(video)
 
-    task = process_pipeline_task.delay(video.id)
-    video.error_message = None
+    try:
+        task = process_pipeline_task.delay(video.id)
+        _ = task.id
+        video.error_message = None
+    except Exception as exc:
+        logger.warning("Could not enqueue Celery task for video_id=%s: %s", video.id, exc)
+        video.error_message = "Queued in DB, but task broker unavailable. Start Redis/Celery and retry."
+
     db.add(video)
     db.commit()
-
-    # Store task id via latest related job when worker starts; response remains immediate.
-    _ = task.id
 
     return video
 
