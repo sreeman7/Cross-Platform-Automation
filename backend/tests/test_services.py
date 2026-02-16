@@ -17,6 +17,33 @@ def test_ai_service_generates_caption_and_tags() -> None:
     caption, tags = asyncio.run(service.generate_caption_and_tags("demo"))
     assert caption
     assert len(tags) >= 1
+    assert all(tag.startswith("#") for tag in tags)
+
+
+def test_ai_service_parses_openai_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIService()
+
+    async def fake_call_openai(_context_hint: str) -> str:
+        return '{"caption":"Daily creator update","hashtags":["reels","tiktok","#fyp"]}'
+
+    monkeypatch.setattr(service, "_call_openai", fake_call_openai)
+    caption, tags = asyncio.run(service.generate_caption_and_tags("creator vlog"))
+
+    assert caption == "Daily creator update"
+    assert tags == ["#reels", "#tiktok", "#fyp"]
+
+
+def test_ai_service_fallback_when_openai_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AIService()
+
+    async def failing_call_openai(_context_hint: str) -> str:
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(service, "_call_openai", failing_call_openai)
+    caption, tags = asyncio.run(service.generate_caption_and_tags("my demo reel"))
+
+    assert "cross-platform" in caption.lower()
+    assert len(tags) >= 4
 
 
 def test_video_processor_copies_file(tmp_path: Path) -> None:

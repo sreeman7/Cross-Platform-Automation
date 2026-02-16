@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     tiktok_redirect_uri: str = "http://localhost:8000/auth/tiktok/callback"
 
     openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    openai_timeout_seconds: int = 30
 
 
 settings = Settings()
