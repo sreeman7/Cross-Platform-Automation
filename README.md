@@ -4,7 +4,7 @@ Automated social media distribution system that takes Instagram Reels, processes
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, and Phase 7 implementations:
+This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, and Phase 8 implementations:
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
@@ -14,6 +14,7 @@ This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3
 - Frontend TikTok connect flow, OAuth callback handling, and per-video job timeline view
 - Initial pytest test suite
 - Docker and docker-compose setup
+- CI workflow for backend tests + frontend build
 
 ## Architecture
 
@@ -104,6 +105,23 @@ By default, frontend expects backend at `http://localhost:8000`. Override using 
 docker compose up --build
 ```
 
+## Testing
+
+Backend tests:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest --cov=app --cov-report=term-missing
+```
+
+Notes:
+
+- `backend/tests/conftest.py` forces safe local defaults for test execution.
+- CI enforces `--cov-fail-under=70` on backend tests.
+
 ## Implemented API Endpoints
 
 - `POST /api/videos/`
@@ -125,9 +143,9 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 ## Next Milestones
 
 1. Add Alembic migrations for managed schema changes.
-2. Add auth, richer analytics, and stronger test coverage.
-3. Deploy backend + worker to Railway and frontend to Vercel.
-4. Add TikTok publish status polling so final public URL is fetched after async processing.
+2. Add user authentication and role-based access.
+3. Add TikTok publish-status polling to resolve final public URLs.
+4. Record demo video and add dashboard/API screenshots.
 
 ## Phase 3 Storage Notes
 
@@ -186,6 +204,55 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 - Frontend API client now includes methods for:
   - TikTok auth URL, callback exchange, account status
   - per-video jobs retrieval
+
+## Phase 8 Testing and Deployment Notes
+
+- Added CI pipeline:
+  - `.github/workflows/ci.yml`
+  - backend pytest + coverage gate (70%)
+  - frontend production build check
+- Added test config:
+  - `backend/pytest.ini`
+  - `backend/tests/conftest.py` for local-safe env defaults
+- Added deployment config:
+  - `railway.toml` for backend service start/health checks
+  - `vercel.json` for frontend static deployment and SPA routing
+  - `frontend/.env.example` with `VITE_API_URL`
+
+## Deployment Guide
+
+### Backend API (Railway)
+
+1. Create a Railway service from this repo root.
+2. Set root directory to `backend`.
+3. Build command:
+   - `pip install -r requirements.txt`
+4. Start command:
+   - `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+5. Add all required env vars from `backend/.env.example`.
+6. Verify health endpoint:
+   - `GET /health`
+
+### Celery Worker (Railway)
+
+1. Create a second Railway service from same repo.
+2. Set root directory to `backend`.
+3. Build command:
+   - `pip install -r requirements.txt`
+4. Start command:
+   - `celery -A app.workers.celery_app worker --loglevel=info`
+5. Reuse same env vars as backend API.
+
+### Frontend (Vercel)
+
+1. Import repo into Vercel.
+2. Set project root to `frontend`.
+3. Build command:
+   - `npm run build`
+4. Output directory:
+   - `dist`
+5. Add env var:
+   - `VITE_API_URL=https://your-backend-domain`
 
 ## License
 

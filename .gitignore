@@ -17,8 +17,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
+.coverage
+htmlcov/
 .venv/
 venv/
+*.db
 
 # Node.js
 node_modules/

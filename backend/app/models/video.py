@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,7 +26,10 @@ class Video(Base):
     local_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
-    hashtags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    hashtags: Mapped[list[str] | None] = mapped_column(
+        JSON().with_variant(ARRAY(String), "postgresql"),
+        nullable=True,
+    )
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
