@@ -91,3 +91,28 @@ class JobResponse(BaseModel):
     started_at: datetime | None
     completed_at: datetime | None
     error_message: str | None
+
+
+class TikTokAuthUrlResponse(BaseModel):
+    """Response containing the TikTok OAuth authorization URL."""
+
+    authorization_url: str
+    state: str
+
+
+class TikTokCallbackResponse(BaseModel):
+    """Response returned after TikTok OAuth callback token exchange."""
+
+    connected: bool
+    open_id: str | None
+    scope: str | None
+    expires_at: datetime | None
+
+
+class TikTokAccountStatusResponse(BaseModel):
+    """Current TikTok account connection status."""
+
+    connected: bool
+    open_id: str | None
+    scope: str | None
+    expires_at: str | None

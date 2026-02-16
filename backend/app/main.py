@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.tiktok import router as tiktok_router
 from app.api.videos import router as videos_router
 from app.config import settings
 from app.database import Base, engine
@@ -36,3 +37,4 @@ def healthcheck() -> dict[str, str]:
 
 
 app.include_router(videos_router)
+app.include_router(tiktok_router)

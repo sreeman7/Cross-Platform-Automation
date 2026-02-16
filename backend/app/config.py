@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     tiktok_client_key: str = ""
     tiktok_client_secret: str = ""
     tiktok_redirect_uri: str = "http://localhost:8000/auth/tiktok/callback"
+    tiktok_api_base_url: str = "https://open.tiktokapis.com"
+    tiktok_auth_base_url: str = "https://www.tiktok.com/v2/auth/authorize/"
+    tiktok_scopes: str = "user.info.basic,video.publish"
+    tiktok_mock_mode: bool = True
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"

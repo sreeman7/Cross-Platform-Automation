@@ -4,12 +4,12 @@ Automated social media distribution system that takes Instagram Reels, processes
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, and Phase 5 implementations:
+This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 implementations:
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
 - Celery worker and Redis-backed task queue with per-step job tracking
-- Service modules for Instagram download (Instaloader-based), video processing, real R2 storage upload/download, AI captions, and TikTok upload
+- Service modules for Instagram download (Instaloader-based), video processing, real R2 storage upload/download, AI captions, and TikTok OAuth/upload
 - React + Tailwind dashboard for submitting URLs and monitoring processing status
 - Initial pytest test suite
 - Docker and docker-compose setup
@@ -112,18 +112,21 @@ docker compose up --build
 - `PATCH /api/videos/{id}`
 - `DELETE /api/videos/{id}`
 - `GET /api/stats/summary`
+- `GET /api/tiktok/auth-url`
+- `GET /api/tiktok/callback`
+- `GET /api/tiktok/account`
 - `GET /health`
 
 ## Notes on Integrations
 
-Instagram download now uses real shortcode parsing and Instaloader post resolution, then downloads media bytes with retries. Cloudflare R2 storage uses real `boto3` S3-compatible upload/download logic with retries. OpenAI caption generation is implemented with retry + graceful fallback when API/config fails. TikTok upload is still scaffolded for Phase 6.
+Instagram download now uses real shortcode parsing and Instaloader post resolution, then downloads media bytes with retries. Cloudflare R2 storage uses real `boto3` S3-compatible upload/download logic with retries. OpenAI caption generation is implemented with retry + graceful fallback when API/config fails. TikTok OAuth/token handling and upload initialization are implemented for Phase 6.
 
 ## Next Milestones
 
-1. Replace TikTok upload stub with production TikTok Content Posting API integration.
-2. Add Alembic migrations for managed schema changes.
-3. Add auth, richer analytics, and stronger test coverage.
-4. Deploy backend + worker to Railway and frontend to Vercel.
+1. Add Alembic migrations for managed schema changes.
+2. Add auth, richer analytics, and stronger test coverage.
+3. Deploy backend + worker to Railway and frontend to Vercel.
+4. Add TikTok publish status polling so final public URL is fetched after async processing.
 
 ## Phase 3 Storage Notes
 
@@ -156,6 +159,21 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 - New env vars:
   - `OPENAI_MODEL` (default: `gpt-4o-mini`)
   - `OPENAI_TIMEOUT_SECONDS` (default: `30`)
+
+## Phase 6 TikTok Notes
+
+- Added OAuth endpoints:
+  - `GET /api/tiktok/auth-url`
+  - `GET /api/tiktok/callback`
+  - `GET /api/tiktok/account`
+- Added persistent token model: `tiktok_tokens`.
+- `TikTokService` now supports:
+  - OAuth auth URL generation
+  - code-to-token exchange
+  - automatic token refresh
+  - upload initialization + binary upload calls
+- Dev-mode option:
+  - `TIKTOK_MOCK_MODE=True` keeps local development/testing unblocked without live TikTok credentials.
 
 ## License
 

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from app.api import tiktok as tiktok_api
 from app.api import videos as videos_api
 from app.main import app
 
@@ -58,3 +59,27 @@ def test_video_jobs_tracking_endpoint(monkeypatch) -> None:
     jobs = jobs_response.json()
     assert len(jobs) >= 1
     assert jobs[0]["task_type"] == "process_pipeline"
+
+
+def test_tiktok_auth_endpoints(monkeypatch) -> None:
+    class FakeToken:
+        open_id = "open_123"
+        scope = "video.publish"
+        expires_at = None
+
+    async def fake_exchange(_self, _db, _code):
+        return FakeToken()
+
+    monkeypatch.setattr(tiktok_api.TikTokService, "exchange_code_for_token", fake_exchange)
+
+    auth_response = client.get("/api/tiktok/auth-url")
+    assert auth_response.status_code == 200
+    assert "authorization_url" in auth_response.json()
+
+    callback_response = client.get("/api/tiktok/callback?code=abc123&state=state123")
+    assert callback_response.status_code == 200
+    assert callback_response.json()["connected"] is True
+
+    account_response = client.get("/api/tiktok/account")
+    assert account_response.status_code == 200
+    assert "connected" in account_response.json()

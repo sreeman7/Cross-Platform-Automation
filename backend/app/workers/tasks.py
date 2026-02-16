@@ -213,7 +213,7 @@ def _run_caption_and_publish_step(
             celery_task_id=celery_task_id,
         )
         tiktok_service = TikTokService()
-        tiktok_url, tiktok_video_id = asyncio.run(tiktok_service.upload_video(source_path, caption))
+        tiktok_url, tiktok_video_id = asyncio.run(tiktok_service.upload_video(source_path, caption, db=db))
 
         video.tiktok_url = tiktok_url
         video.tiktok_video_id = tiktok_video_id

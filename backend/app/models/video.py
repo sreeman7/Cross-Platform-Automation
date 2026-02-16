@@ -52,3 +52,18 @@ class Job(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     video: Mapped[Video] = relationship(back_populates="jobs")
+
+
+class TikTokToken(Base):
+    """Stores TikTok OAuth tokens for content posting API usage."""
+
+    __tablename__ = "tiktok_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    open_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

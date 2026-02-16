@@ -3,6 +3,9 @@
 from app.schemas.video import (
     JobResponse,
     StatsSummary,
+    TikTokAccountStatusResponse,
+    TikTokAuthUrlResponse,
+    TikTokCallbackResponse,
     VideoCreate,
     VideoListItem,
     VideoResponse,
@@ -16,4 +19,7 @@ __all__ = [
     "VideoListItem",
     "StatsSummary",
     "JobResponse",
+    "TikTokAuthUrlResponse",
+    "TikTokCallbackResponse",
+    "TikTokAccountStatusResponse",
 ]
