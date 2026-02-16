@@ -30,12 +30,49 @@ def test_video_processor_copies_file(tmp_path: Path) -> None:
 
 
 def test_storage_service_returns_url(tmp_path: Path) -> None:
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.upload_calls: list[tuple[str, str, str, dict]] = []
+            self.download_calls: list[tuple[str, str, str]] = []
+
+        def upload_file(self, file_name: str, bucket: str, key: str, ExtraArgs: dict) -> None:
+            self.upload_calls.append((file_name, bucket, key, ExtraArgs))
+
+        def download_file(self, bucket: str, key: str, destination: str) -> None:
+            self.download_calls.append((bucket, key, destination))
+            Path(destination).write_bytes(b"downloaded")
+
     test_file = tmp_path / "clip.mp4"
     test_file.write_bytes(b"video")
-    service = StorageService()
+    fake_client = FakeS3Client()
+    service = StorageService(
+        client=fake_client,
+        bucket_name="social-media-videos",
+        endpoint_url="https://account-id.r2.cloudflarestorage.com",
+        public_base_url="https://cdn.example.dev",
+    )
 
     url = asyncio.run(service.upload_file(test_file, "videos/1/clip.mp4"))
-    assert url.startswith("http")
+    assert url == "https://cdn.example.dev/videos/1/clip.mp4"
+    assert len(fake_client.upload_calls) == 1
+
+    destination = tmp_path / "downloaded" / "clip.mp4"
+    downloaded_path = asyncio.run(service.download_file("videos/1/clip.mp4", destination))
+    assert downloaded_path.exists()
+    assert downloaded_path.read_bytes() == b"downloaded"
+
+
+def test_storage_service_falls_back_to_endpoint_url() -> None:
+    service = StorageService(
+        client=SimpleNamespace(upload_file=lambda *_args, **_kwargs: None),
+        bucket_name="social-media-videos",
+        endpoint_url="https://account-id.r2.cloudflarestorage.com",
+        public_base_url="",
+    )
+    assert (
+        service.get_file_url("videos/1/test.mp4")
+        == "https://account-id.r2.cloudflarestorage.com/social-media-videos/videos/1/test.mp4"
+    )
 
 
 def test_instagram_download_with_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

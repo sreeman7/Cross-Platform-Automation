@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     r2_bucket_name: str = ""
     r2_endpoint_url: str = ""
     r2_public_base_url: str = ""
+    r2_region: str = "auto"
 
     instagram_access_token: str = ""
 
