@@ -1,7 +1,10 @@
 """Integration-style tests for API endpoints."""
 
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
+from app.api import videos as videos_api
 from app.main import app
 
 client = TestClient(app)
@@ -38,3 +41,20 @@ def test_video_crud_flow() -> None:
 
     delete_response = client.delete(f"/api/videos/{video_id}")
     assert delete_response.status_code == 200
+
+
+def test_video_jobs_tracking_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(videos_api.process_pipeline_task, "delay", lambda _video_id: SimpleNamespace(id="task-123"))
+
+    create_response = client.post(
+        "/api/videos/",
+        json={"instagram_url": "https://www.instagram.com/reel/JOB123/"},
+    )
+    assert create_response.status_code == 201
+    video_id = create_response.json()["id"]
+
+    jobs_response = client.get(f"/api/videos/{video_id}/jobs")
+    assert jobs_response.status_code == 200
+    jobs = jobs_response.json()
+    assert len(jobs) >= 1
+    assert jobs[0]["task_type"] == "process_pipeline"

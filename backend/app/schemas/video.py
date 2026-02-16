@@ -76,3 +76,18 @@ class StatsSummary(BaseModel):
     uploading: int
     completed: int
     failed: int
+
+
+class JobResponse(BaseModel):
+    """Response model for background job tracking records."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    video_id: int
+    celery_task_id: str | None
+    task_type: str
+    status: str
+    started_at: datetime | None
+    completed_at: datetime | None
+    error_message: str | None

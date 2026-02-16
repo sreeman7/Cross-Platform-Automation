@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.video import Video
-from app.schemas.video import StatsSummary, VideoCreate, VideoListItem, VideoResponse, VideoUpdate
+from app.models.video import Job, Video
+from app.schemas.video import JobResponse, StatsSummary, VideoCreate, VideoListItem, VideoResponse, VideoUpdate
 from app.workers.tasks import process_pipeline_task
 
 router = APIRouter(prefix="/api", tags=["videos"])
@@ -26,7 +26,14 @@ def create_video(payload: VideoCreate, db: Session = Depends(get_db)) -> Video:
 
     try:
         task = process_pipeline_task.delay(video.id)
-        _ = task.id
+        db.add(
+            Job(
+                video_id=video.id,
+                celery_task_id=task.id,
+                task_type="process_pipeline",
+                status="pending",
+            )
+        )
         video.error_message = None
     except Exception as exc:
         logger.warning("Could not enqueue Celery task for video_id=%s: %s", video.id, exc)
@@ -61,6 +68,17 @@ def get_video(video_id: int, db: Session = Depends(get_db)) -> Video:
     if not video:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
     return video
+
+
+@router.get("/videos/{video_id}/jobs", response_model=list[JobResponse])
+def get_video_jobs(video_id: int, db: Session = Depends(get_db)) -> list[Job]:
+    """Return all background jobs associated with a video."""
+
+    video = db.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
+
+    return db.query(Job).filter(Job.video_id == video_id).order_by(Job.id.asc()).all()
 
 
 @router.patch("/videos/{video_id}", response_model=VideoResponse)

@@ -4,11 +4,11 @@ Automated social media distribution system that takes Instagram Reels, processes
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus Phase 2 and Phase 3 implementations:
+This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, and Phase 4 implementations:
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
-- Celery worker and Redis-backed task queue wiring
+- Celery worker and Redis-backed task queue with per-step job tracking
 - Service modules for Instagram download (Instaloader-based), video processing, real R2 storage upload/download, AI captions, and TikTok upload
 - React + Tailwind dashboard for submitting URLs and monitoring processing status
 - Initial pytest test suite
@@ -108,6 +108,7 @@ docker compose up --build
 - `POST /api/videos/`
 - `GET /api/videos/`
 - `GET /api/videos/{id}`
+- `GET /api/videos/{id}/jobs`
 - `PATCH /api/videos/{id}`
 - `DELETE /api/videos/{id}`
 - `GET /api/stats/summary`
@@ -131,6 +132,18 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 - URL resolution:
   - Uses `R2_PUBLIC_BASE_URL` when provided (recommended for public CDN URLs).
   - Falls back to endpoint-based URL format if public base URL is not set.
+
+## Phase 4 Queue Notes
+
+- Celery tasks implemented:
+  - `download_video_task`
+  - `upload_to_storage_task`
+  - `process_pipeline_task` (orchestrates full workflow)
+- Retry policy: Celery autoretry with max 3 retries and exponential backoff.
+- Job tracking:
+  - `POST /api/videos/` creates a pending `process_pipeline` job when queueing succeeds.
+  - Every pipeline step writes a `jobs` row (`download_video`, `process_video`, `upload_storage`, `generate_caption`, `upload_tiktok`).
+  - Query per-video jobs via `GET /api/videos/{id}/jobs`.
 
 ## License
 

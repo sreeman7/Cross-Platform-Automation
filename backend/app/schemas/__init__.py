@@ -1,6 +1,7 @@
 """Pydantic schema package."""
 
 from app.schemas.video import (
+    JobResponse,
     StatsSummary,
     VideoCreate,
     VideoListItem,
@@ -14,4 +15,5 @@ __all__ = [
     "VideoResponse",
     "VideoListItem",
     "StatsSummary",
+    "JobResponse",
 ]
