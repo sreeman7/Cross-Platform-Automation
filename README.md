@@ -279,13 +279,6 @@ Capture checklist is available in:
 
 - `docs/screenshots/README.md`
 
-## Demo
-
-- 2-3 minute recording script:
-  - `docs/DEMO_SCRIPT.md`
-- Slide structure for project presentation:
-  - `docs/SLIDE_OUTLINE.md`
-
 ## License
 
 MIT
