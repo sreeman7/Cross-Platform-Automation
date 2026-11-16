@@ -103,7 +103,7 @@ In production set `DEBUG=False`, a strong `ADMIN_PASSWORD`, a unique `SECRET_KEY
 1. Sign in locally and walk through the dashboard in a browser.
 2. Configure R2 and run one creator-owned Reel through `ready_for_review`, then approve a clearly labeled simulated upload.
 3. Decide whether to redesign the product for TikTok's Direct Post requirements. Do not claim live publishing until developer approval and a real private-post test succeed.
-4. Deploy the API, worker, and frontend only after the local flow is reliable. Capture screenshots and a short demo, add a license file, and document the deployed URLs.
+4. Deploy the API, worker, and frontend only after the local flow is reliable. Capture screenshots and a short demo, and document the deployed URLs.
 
 ## Limits And Next Work
 
@@ -115,3 +115,7 @@ In production set `DEBUG=False`, a strong `ADMIN_PASSWORD`, a unique `SECRET_KEY
 - Screenshots, a recorded demo, and a verified live deployment are still outstanding.
 
 Only republish media you own or have permission to use. See [the demo walkthrough](docs/DEMO_SCRIPT.md) for a suggested recording flow.
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
