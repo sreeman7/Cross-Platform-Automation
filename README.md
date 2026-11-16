@@ -1,4 +1,4 @@
-# Cross-Platform Automation
+# Cross-Platform Automation.
 
 A single-creator workspace for preparing a creator-owned Instagram Reel for TikTok. Submit a Reel URL, follow the processing jobs, review the caption draft and video, then approve either a simulated upload or a private TikTok upload. The dashboard shows status and failure reasons.
 
