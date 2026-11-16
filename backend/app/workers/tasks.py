@@ -92,7 +92,7 @@ def _run_download_step(
     video: Video,
     output_dir: Path,
     celery_task_id: str | None,
-) -> Path:
+) -> tuple[Path, str | None]:
     """Download media from Instagram and persist media metadata."""
 
     step_job = _start_job(
@@ -111,7 +111,7 @@ def _run_download_step(
         db.commit()
 
         _complete_job(db, step_job)
-        return result.video_path
+        return result.video_path, result.caption
     except Exception as exc:
         _fail_job(db, step_job, str(exc))
         raise
@@ -182,6 +182,7 @@ def _run_caption_step(
     db,
     *,
     video: Video,
+    context_hint: str | None,
     celery_task_id: str | None,
 ) -> None:
     """Generate editable caption and hashtags before creator review."""
@@ -194,7 +195,7 @@ def _run_caption_step(
     )
     try:
         ai_service = AIService()
-        caption, hashtags = asyncio.run(ai_service.generate_caption_and_tags(context_hint=video.instagram_url))
+        caption, hashtags = asyncio.run(ai_service.generate_caption_and_tags(context_hint=context_hint or ""))
 
         video.caption = caption
         video.hashtags = hashtags
@@ -384,7 +385,7 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
 
         with TemporaryDirectory() as tmp:
             tmp_dir = Path(tmp) / str(video_id)
-            source_path = _run_download_step(
+            source_path, source_caption = _run_download_step(
                 db,
                 video=video,
                 output_dir=tmp_dir,
@@ -406,6 +407,7 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
             _run_caption_step(
                 db,
                 video=video,
+                context_hint=source_caption,
                 celery_task_id=self.request.id,
             )
 

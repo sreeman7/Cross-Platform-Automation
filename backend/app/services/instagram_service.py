@@ -28,6 +28,7 @@ class InstagramDownloadResult:
     video_path: Path
     shortcode: str
     media_id: str | None
+    caption: str | None = None
 
 
 class InstagramService:
@@ -37,7 +38,7 @@ class InstagramService:
         """Extract supported Instagram shortcode from reel/post/tv URL."""
 
         parsed = urlparse(instagram_url)
-        if "instagram.com" not in parsed.netloc:
+        if parsed.scheme != "https" or parsed.hostname not in {"instagram.com", "www.instagram.com"}:
             raise InvalidInstagramUrlError("Only instagram.com URLs are supported.")
 
         parts = [part for part in parsed.path.split("/") if part]
@@ -104,6 +105,7 @@ class InstagramService:
                     video_path=output_path,
                     shortcode=shortcode,
                     media_id=str(media_id) if media_id is not None else None,
+                    caption=getattr(post, "caption", None),
                 )
 
             except InvalidInstagramUrlError:

@@ -32,7 +32,7 @@ def test_pipeline_prepares_review_without_publishing(monkeypatch, tmp_path: Path
         output_dir.mkdir(parents=True, exist_ok=True)
         path = output_dir / "source.mp4"
         path.write_bytes(b"video")
-        return SimpleNamespace(video_path=path, media_id="123")
+        return SimpleNamespace(video_path=path, media_id="123", caption="A hike in the Rockies")
 
     async def process(_self, source, output_dir):
         return source
@@ -41,6 +41,7 @@ def test_pipeline_prepares_review_without_publishing(monkeypatch, tmp_path: Path
         return "https://cdn.example/video.mp4"
 
     async def caption(_self, context_hint):
+        assert context_hint == "A hike in the Rockies"
         return "A clip", ["#demo"]
 
     monkeypatch.setattr(tasks.InstagramService, "download_video_with_metadata", download)

@@ -1,4 +1,4 @@
-"""Unit tests for service scaffolds."""
+"""Unit tests for integration service boundaries."""
 
 import asyncio
 from pathlib import Path
@@ -16,12 +16,13 @@ def test_ai_service_generates_caption_and_tags() -> None:
     service = AIService()
     caption, tags = asyncio.run(service.generate_caption_and_tags("demo"))
     assert caption
-    assert len(tags) >= 1
+    assert tags == []
     assert all(tag.startswith("#") for tag in tags)
 
 
 def test_ai_service_parses_openai_json(monkeypatch: pytest.MonkeyPatch) -> None:
     service = AIService()
+    monkeypatch.setattr(service, "_client", object())
 
     async def fake_call_openai(_context_hint: str) -> str:
         return '{"caption":"Daily creator update","hashtags":["reels","tiktok","#fyp"]}'
@@ -35,6 +36,7 @@ def test_ai_service_parses_openai_json(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_ai_service_fallback_when_openai_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     service = AIService()
+    monkeypatch.setattr(service, "_client", object())
 
     async def failing_call_openai(_context_hint: str) -> str:
         raise RuntimeError("network down")
@@ -42,8 +44,8 @@ def test_ai_service_fallback_when_openai_fails(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(service, "_call_openai", failing_call_openai)
     caption, tags = asyncio.run(service.generate_caption_and_tags("my demo reel"))
 
-    assert "cross-platform" in caption.lower()
-    assert len(tags) >= 4
+    assert "describes this video" in caption.lower()
+    assert tags == []
 
 
 def test_video_processor_rejects_invalid_file(tmp_path: Path) -> None:
@@ -106,7 +108,7 @@ def test_instagram_download_with_metadata(tmp_path: Path, monkeypatch: pytest.Mo
 
     def fake_get_post(shortcode: str) -> SimpleNamespace:
         assert shortcode == "ABC123"
-        return SimpleNamespace(is_video=True, video_url="https://cdn.example.com/mock.mp4", mediaid=987654)
+        return SimpleNamespace(is_video=True, video_url="https://cdn.example.com/mock.mp4", mediaid=987654, caption="Rocky Mountain trail")
 
     async def fake_download(video_url: str, output_path: Path) -> None:
         assert video_url.endswith(".mp4")
@@ -118,6 +120,7 @@ def test_instagram_download_with_metadata(tmp_path: Path, monkeypatch: pytest.Mo
     result = asyncio.run(instagram.download_video_with_metadata("https://www.instagram.com/reel/ABC123/", tmp_path))
     assert result.video_path.exists()
     assert result.media_id == "987654"
+    assert result.caption == "Rocky Mountain trail"
 
 
 def test_instagram_invalid_url_raises(tmp_path: Path) -> None:

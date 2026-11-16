@@ -46,6 +46,15 @@ def test_video_crud_flow(monkeypatch) -> None:
     assert delete_response.status_code == 200
 
 
+def test_rejects_lookalike_instagram_host() -> None:
+    """A lookalike hostname must not enter the processing queue."""
+
+    response = client.post(
+        "/api/videos/", json={"instagram_url": "https://instagram.com.evil.example/reel/ABC123/"}
+    )
+    assert response.status_code == 422
+
+
 def test_video_jobs_tracking_endpoint(monkeypatch) -> None:
     monkeypatch.setattr(videos_api.process_pipeline_task, "delay", lambda _video_id: SimpleNamespace(id="task-123"))
 

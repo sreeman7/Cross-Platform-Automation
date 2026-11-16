@@ -25,16 +25,10 @@ class AIService:
         self.timeout = settings.openai_timeout_seconds
         self._client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
 
-    def _fallback_caption_and_tags(self, context_hint: str) -> tuple[str, list[str]]:
-        """Return deterministic fallback caption and hashtags when AI is unavailable."""
+    def _fallback_caption_and_tags(self) -> tuple[str, list[str]]:
+        """Return a neutral draft when there is no usable video context."""
 
-        safe_hint = context_hint.strip()[:60]
-        caption = (
-            f"Fresh cross-platform clip drop. {safe_hint}"
-            if safe_hint
-            else "Fresh cross-platform clip drop."
-        )
-        return caption, ["#reels", "#tiktok", "#automation", "#fyp", "#contentcreator"]
+        return "Add a caption that describes this video before publishing.", []
 
     async def _call_openai(self, context_hint: str) -> str:
         """Call OpenAI chat completions API and return raw content."""
@@ -107,6 +101,9 @@ class AIService:
         when API key/network/model responses fail.
         """
 
+        if self._client is None or not context_hint.strip():
+            return self._fallback_caption_and_tags()
+
         logger.info("Generating caption", extra={"context_hint": context_hint[:80]})
         for attempt in range(3):
             try:
@@ -116,7 +113,7 @@ class AIService:
             except Exception as exc:
                 logger.warning("AI generation attempt failed (%s/3): %s", attempt + 1, exc)
                 if attempt == 2:
-                    fallback_caption, fallback_tags = self._fallback_caption_and_tags(context_hint)
+                    fallback_caption, fallback_tags = self._fallback_caption_and_tags()
                     logger.info("Using fallback caption generation.")
                     return fallback_caption, fallback_tags
                 await asyncio.sleep(2**attempt)

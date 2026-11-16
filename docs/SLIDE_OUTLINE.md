@@ -1,49 +1,8 @@
-# Internship Presentation Slide Outline
+# Presentation Notes
 
-## Slide 1: Title
-
-- Cross-Platform Video Automation
-- Instagram Reels -> TikTok with AI Captioning
-- Your name, role, and tech stack badges
-
-## Slide 2: Problem
-
-- Manual cross-posting is repetitive
-- Caption writing is inconsistent
-- No centralized progress visibility
-
-## Slide 3: Solution
-
-- One URL submission starts the full pipeline
-- Automated media processing and posting
-- Real-time dashboard and job tracking
-
-## Slide 4: System Design
-
-- React dashboard
-- FastAPI API layer
-- Celery worker + Redis
-- PostgreSQL + R2 + OpenAI + TikTok API
-
-## Slide 5: Data and APIs
-
-- `videos` and `jobs` tables
-- Core REST endpoints
-- OAuth + token management for TikTok
-
-## Slide 6: Reliability
-
-- Retry/backoff patterns
-- Structured error handling
-- CI checks + coverage gate
-
-## Slide 7: Demo Highlights
-
-- Submit reel
-- Monitor timeline
-- View generated caption and final TikTok URL
-
-## Slide 8: Results and Next Steps
-
-- Current status (Phase 1-8 complete)
-- Planned improvements: auth, publish polling, analytics depth
+1. **Problem:** Cross-posting a creator-owned Reel involves repetitive downloading, conversion, caption editing, and tracking.
+2. **Design:** FastAPI accepts the request; Celery and Redis run the processing pipeline; PostgreSQL stores video and job state; R2 holds the processed file.
+3. **Safety decision:** Processing stops at `ready_for_review`. A separate approval action starts private TikTok publishing, and an ambiguous upload is not retried automatically.
+4. **Demo:** Show a real local run or clearly labeled mock mode. Show the job timeline, caption edit, and status result. Do not present mock mode as a real upload.
+5. **Validation:** Backend tests and frontend build run in CI. Live Instagram, R2, and TikTok access still need verification with creator-owned media and approved credentials.
+6. **Next work:** Replace Instaloader with official connected-account ingestion, harden token storage, and add multi-user authorization only after the single-creator flow is validated.

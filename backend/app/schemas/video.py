@@ -15,7 +15,7 @@ class VideoCreate(BaseModel):
     def validate_instagram_url(cls, value: HttpUrl) -> HttpUrl:
         """Restrict submissions to supported Instagram media URLs."""
 
-        if "instagram.com" not in value.host:
+        if value.host not in {"instagram.com", "www.instagram.com"}:
             raise ValueError("URL must be on instagram.com")
 
         parts = [part for part in value.path.split("/") if part]
