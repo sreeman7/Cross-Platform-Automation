@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from app.services.ai_service import AIService
 from app.services.instagram_service import InstagramService
-from app.services.storage_service import StorageService
+from app.services.storage_service import StorageService, StorageServiceError
 from app.services.tiktok_service import TikTokService
 from app.services.video_processor import VideoProcessor
 
@@ -90,17 +90,19 @@ def test_storage_service_returns_url(tmp_path: Path) -> None:
     assert downloaded_path.read_bytes() == b"downloaded"
 
 
-def test_storage_service_falls_back_to_endpoint_url() -> None:
+def test_storage_service_requires_public_preview_url() -> None:
+    uploads = []
     service = StorageService(
-        client=SimpleNamespace(upload_file=lambda *_args, **_kwargs: None),
+        client=SimpleNamespace(upload_file=lambda *_args, **_kwargs: uploads.append(True)),
         bucket_name="social-media-videos",
         endpoint_url="https://account-id.r2.cloudflarestorage.com",
         public_base_url="",
     )
-    assert (
+    with pytest.raises(StorageServiceError, match="R2_PUBLIC_BASE_URL"):
         service.get_file_url("videos/1/test.mp4")
-        == "https://account-id.r2.cloudflarestorage.com/social-media-videos/videos/1/test.mp4"
-    )
+    with pytest.raises(StorageServiceError, match="R2_PUBLIC_BASE_URL"):
+        asyncio.run(service.upload_file(Path("/unused/clip.mp4"), "videos/1/test.mp4"))
+    assert uploads == []
 
 
 def test_instagram_download_with_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

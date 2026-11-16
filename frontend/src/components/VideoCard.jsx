@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import JobTimeline from './JobTimeline'
 
-function VideoCard({ video, jobs, onLoadJobs, onApprove, jobsLoading }) {
+function VideoCard({ video, mockMode, jobs, onLoadJobs, onApprove, jobsLoading }) {
   const [showJobs, setShowJobs] = useState(false)
   const serverTags = (video.hashtags || []).join(' ')
   const [caption, setCaption] = useState(video.caption || '')
@@ -49,7 +49,9 @@ function VideoCard({ video, jobs, onLoadJobs, onApprove, jobsLoading }) {
           <label className="block text-sm text-slate-800" htmlFor={`tags-${video.id}`}>Hashtags</label>
           <input id={`tags-${video.id}`} value={tags} onChange={(event) => setTags(event.target.value)}
             className="w-full rounded border border-slate-300 p-2" />
-          <p className="text-xs text-slate-600">The connected TikTok account will receive this clip as a private post.</p>
+          <p className="text-xs text-slate-600">
+            {mockMode ? 'Demo mode: approval simulates a TikTok upload; no post is created.' : 'The connected TikTok account will receive this clip as a private post.'}
+          </p>
           <button type="button" disabled={approving || !caption.trim()}
             onClick={async () => {
               setApproving(true)
@@ -57,7 +59,7 @@ function VideoCard({ video, jobs, onLoadJobs, onApprove, jobsLoading }) {
               finally { setApproving(false) }
             }}
             className="rounded bg-emerald-700 px-4 py-2 text-white disabled:opacity-50">
-            {approving ? 'Queuing...' : 'Approve and publish privately'}
+            {approving ? 'Queuing...' : mockMode ? 'Approve simulated upload' : 'Approve and publish privately'}
           </button>
         </div>
       )}

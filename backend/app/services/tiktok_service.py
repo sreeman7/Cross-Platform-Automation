@@ -21,6 +21,10 @@ class TikTokServiceError(Exception):
     """Raised when TikTok auth or upload operations fail."""
 
 
+class TikTokPublicationFailed(TikTokServiceError):
+    """Raised only when TikTok confirms that publication failed."""
+
+
 class TikTokService:
     """Handles TikTok OAuth and content posting API interactions."""
 
@@ -65,13 +69,35 @@ class TikTokService:
             response.raise_for_status()
             return response.json()
 
-    async def _put_bytes(self, url: str, video_bytes: bytes) -> None:
-        """Upload binary content to TikTok-provided upload URL."""
+    async def _put_bytes(self, url: str, chunk: bytes, start: int, total_size: int) -> None:
+        """Upload one sequential chunk to TikTok's upload URL."""
 
         timeout = httpx.Timeout(120.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.put(url, content=video_bytes, headers={"Content-Type": "video/mp4", "Content-Range": f"bytes 0-{len(video_bytes)-1}/{len(video_bytes)}"})
+            response = await client.put(
+                url,
+                content=chunk,
+                headers={
+                    "Content-Type": "video/mp4",
+                    "Content-Range": f"bytes {start}-{start + len(chunk) - 1}/{total_size}",
+                },
+            )
             response.raise_for_status()
+
+    @staticmethod
+    def _chunk_sizes(video_size: int) -> list[int]:
+        """Plan sequential chunks within TikTok's 64 MB non-final limit."""
+
+        if video_size <= 0:
+            raise TikTokServiceError("Video file is empty.")
+        if video_size <= 64_000_000:
+            return [video_size]
+
+        chunk_size = 10_000_000
+        chunk_count = video_size // chunk_size
+        if chunk_count > 1000:
+            raise TikTokServiceError("Video exceeds TikTok's maximum chunk count.")
+        return [chunk_size] * (chunk_count - 1) + [video_size - chunk_size * (chunk_count - 1)]
 
     async def _post_token_form(self, payload: dict) -> dict:
         """Exchange or refresh tokens using TikTok's form encoded OAuth endpoint."""
@@ -81,10 +107,16 @@ class TikTokService:
             response.raise_for_status()
             return response.json()
 
-    def _assert_oauth_config(self) -> None:
+    def assert_oauth_config(self) -> None:
         """Validate required OAuth configuration before API calls."""
 
-        if not self.client_key or not self.client_secret or not self.redirect_uri:
+        if (
+            not self.client_key
+            or not self.client_secret
+            or not self.redirect_uri
+            or self.client_key == "xxx"
+            or self.client_secret == "xxx"
+        ):
             raise TikTokServiceError(
                 "TikTok OAuth config is incomplete. Set TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET, and TIKTOK_REDIRECT_URI."
             )
@@ -92,7 +124,7 @@ class TikTokService:
     async def exchange_code_for_token(self, db: Session, code: str) -> TikTokToken:
         """Exchange OAuth code for tokens and persist them in DB."""
 
-        self._assert_oauth_config()
+        self.assert_oauth_config()
         payload = {
             "client_key": self.client_key,
             "client_secret": self.client_secret,
@@ -188,17 +220,16 @@ class TikTokService:
         creator_info = await self.get_creator_info(access_token)
         if "SELF_ONLY" not in creator_info.get("privacy_level_options", []):
             raise TikTokServiceError("Private posting is not available for this creator account.")
-        video_bytes = await asyncio.to_thread(video_path.read_bytes)
-        if not video_bytes:
-            raise TikTokServiceError("Video file is empty.")
+        video_size = video_path.stat().st_size
+        chunk_sizes = self._chunk_sizes(video_size)
 
         init_payload = {
             "post_info": {"title": caption[:150], "privacy_level": "SELF_ONLY"},
             "source_info": {
                 "source": "FILE_UPLOAD",
-                "video_size": len(video_bytes),
-                "chunk_size": len(video_bytes),
-                "total_chunk_count": 1,
+                "video_size": video_size,
+                "chunk_size": chunk_sizes[0],
+                "total_chunk_count": len(chunk_sizes),
             },
         }
         init_response = await self._post_json(
@@ -214,7 +245,14 @@ class TikTokService:
         if not upload_url:
             raise TikTokServiceError("TikTok did not return upload_url.")
 
-        await self._put_bytes(upload_url, video_bytes)
+        with video_path.open("rb") as video_file:
+            offset = 0
+            for size in chunk_sizes:
+                chunk = await asyncio.to_thread(video_file.read, size)
+                if len(chunk) != size:
+                    raise TikTokServiceError("Video file changed during upload.")
+                await self._put_bytes(upload_url, chunk, offset, video_size)
+                offset += size
         if not publish_id:
             raise TikTokServiceError("TikTok did not return a publish ID.")
         return None, str(publish_id)
@@ -230,7 +268,7 @@ class TikTokService:
             raise TikTokServiceError(response["error"].get("message", "TikTok status request failed."))
         data = response.get("data", {})
         if data.get("status") == "FAILED":
-            raise TikTokServiceError(data.get("fail_reason", "TikTok publishing failed."))
+            raise TikTokPublicationFailed(data.get("fail_reason", "TikTok publishing failed."))
         # TikTok returns a post ID but not the creator's handle; avoid fabricating a URL.
         return data.get("status", "PROCESSING_UPLOAD"), None
 

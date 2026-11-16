@@ -1,6 +1,6 @@
 import VideoCard from './VideoCard'
 
-function VideoQueue({ videos, jobsByVideo, onLoadJobs, onApprove, jobsLoadingByVideo }) {
+function VideoQueue({ videos, mockMode, jobsByVideo, onLoadJobs, onApprove, jobsLoadingByVideo }) {
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-slate-800">Processing Queue</h2>
@@ -12,6 +12,7 @@ function VideoQueue({ videos, jobsByVideo, onLoadJobs, onApprove, jobsLoadingByV
             <VideoCard
               key={video.id}
               video={video}
+              mockMode={mockMode}
               jobs={jobsByVideo[video.id] || []}
               onLoadJobs={onLoadJobs}
               onApprove={onApprove}

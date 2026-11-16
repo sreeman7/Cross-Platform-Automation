@@ -118,6 +118,7 @@ class TikTokAccountStatusResponse(BaseModel):
     """Current TikTok account connection status."""
 
     connected: bool
+    mock_mode: bool
     open_id: str | None
     scope: str | None
     expires_at: str | None

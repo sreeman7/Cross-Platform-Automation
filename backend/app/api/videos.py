@@ -3,6 +3,7 @@
 from collections import Counter
 import logging
 import asyncio
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -11,7 +12,8 @@ from app.database import get_db
 from app.models.video import Job, Video
 from app.schemas.video import JobResponse, StatsSummary, VideoCreate, VideoListItem, VideoResponse, VideoUpdate
 from app.workers.tasks import process_pipeline_task, publish_video_task
-from app.services.tiktok_service import TikTokService, TikTokServiceError
+from app.services.tiktok_service import TikTokPublicationFailed, TikTokService, TikTokServiceError
+from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["videos"])
 logger = logging.getLogger(__name__)
@@ -99,6 +101,16 @@ def approve_video(video_id: int, db: Session = Depends(get_db)) -> Video:
         raise HTTPException(status_code=409, detail="Video is not ready for approval")
     if not video.storage_url or not video.caption:
         raise HTTPException(status_code=409, detail="Processed video and caption are required")
+    if not settings.tiktok_mock_mode:
+        service = TikTokService()
+        try:
+            service.assert_oauth_config()
+        except TikTokServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        account = service.get_account_status(db)
+        scopes = {scope.strip() for scope in (account.get("scope") or "").split(",")}
+        if not account["connected"] or "video.publish" not in scopes:
+            raise HTTPException(status_code=409, detail="Connect a TikTok account with video.publish access first")
 
     video.status = "publishing"
     db.commit()
@@ -126,11 +138,14 @@ def check_publication(video_id: int, db: Session = Depends(get_db)) -> Video:
         publication_status, public_url = asyncio.run(
             TikTokService().fetch_publish_status(db, video.tiktok_video_id)
         )
-    except TikTokServiceError as exc:
+    except TikTokPublicationFailed as exc:
         video.status = "failed"
         video.error_message = str(exc)
         db.commit()
         raise HTTPException(status_code=502, detail="TikTok publishing failed") from exc
+    except (TikTokServiceError, httpx.HTTPError) as exc:
+        logger.warning("TikTok status check unavailable for video_id=%s: %s", video_id, exc)
+        raise HTTPException(status_code=503, detail="TikTok status temporarily unavailable; try again") from exc
     if publication_status == "PUBLISH_COMPLETE":
         video.status = "completed"
         video.tiktok_url = public_url

@@ -37,7 +37,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env`. Use `DEBUG=True` locally and set `DATABASE_URL` and `REDIS_URL` to working services. Upstash's `rediss://` connection URI works with Celery; its `https://` REST endpoint does not. Leave `OPENAI_API_KEY` empty to use a generic caption draft. `TIKTOK_MOCK_MODE=True` simulates the final upload and is labeled as simulated in the dashboard; it does not post to TikTok.
+Edit `.env`. Use `DEBUG=True` locally and set `DATABASE_URL` and `REDIS_URL` to working services. Upstash's `rediss://` connection URI works with Celery; its `https://` REST endpoint does not. Leave `OPENAI_API_KEY` empty to use a generic caption draft. For a full processing run, `R2_PUBLIC_BASE_URL` must point to an enabled public R2 domain; the S3 API endpoint cannot serve browser previews. `TIKTOK_MOCK_MODE=True` simulates the final upload and is labeled as simulated in the dashboard; it does not post to TikTok.
 
 Start three terminals:
 
@@ -95,6 +95,7 @@ In production set `DEBUG=False`, a strong `ADMIN_PASSWORD`, a unique `SECRET_KEY
 
 - Instaloader may fail when Instagram changes access rules. Official Meta ingestion for a connected professional account is planned.
 - TikTok Direct Post requires an approved app and creator authorization. Unaudited apps may be limited to private posts. Private posts may not have public URLs; the dashboard does not invent one.
+- TikTok's developer review has additional product and consent requirements. This single-creator portfolio UI is not yet ready for that audit or a public launch.
 - The dashboard is for one admin, not multiple creator accounts. TikTok tokens are stored in the application database and need a production token-handling review.
 - The initial Alembic migration targets a fresh database. Existing tables created by older versions need a manual schema check before migration.
 - Screenshots, a recorded demo, and a verified live deployment are still outstanding.

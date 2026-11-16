@@ -8,8 +8,7 @@ function Login({ onLogin, error }) {
     event.preventDefault()
     setBusy(true)
     try {
-      await onLogin(password)
-      setPassword('')
+      if (await onLogin(password)) setPassword('')
     } finally {
       setBusy(false)
     }

@@ -37,6 +37,7 @@ function Dashboard({
       <UploadForm onSubmit={onSubmit} loading={submitting} />
       <VideoQueue
         videos={videos}
+        mockMode={account.mock_mode}
         jobsByVideo={jobsByVideo}
         onLoadJobs={onLoadJobs}
         onApprove={onApprove}

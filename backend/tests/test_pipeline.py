@@ -9,7 +9,7 @@ from celery.exceptions import Retry
 
 from app.database import SessionLocal
 from app.models.video import Job, Video
-from app.services.tiktok_service import TikTokService, TikTokServiceError
+from app.services.tiktok_service import TikTokPublicationFailed, TikTokService, TikTokServiceError
 from app.workers import tasks
 
 
@@ -187,3 +187,56 @@ def test_tiktok_creator_info_required_for_private_post(monkeypatch, tmp_path: Pa
     with SessionLocal() as db:
         with pytest.raises(TikTokServiceError, match="Private posting"):
             asyncio.run(service.upload_video(source, "caption", db=db))
+
+
+def test_tiktok_upload_splits_large_video(monkeypatch, tmp_path: Path) -> None:
+    """A video over 64 MB is streamed as valid sequential chunks."""
+
+    source = tmp_path / "large.mp4"
+    with source.open("wb") as output:
+        output.truncate(64_000_001)
+    service = TikTokService()
+    service.mock_mode = False
+    upload_ranges = []
+
+    async def token(_db):
+        return "access"
+
+    async def creator(_token):
+        return {"privacy_level_options": ["SELF_ONLY"]}
+
+    async def init(_path, payload, *, access_token=None):
+        assert payload["source_info"] == {
+            "source": "FILE_UPLOAD",
+            "video_size": 64_000_001,
+            "chunk_size": 10_000_000,
+            "total_chunk_count": 6,
+        }
+        return {"data": {"upload_url": "https://upload.example/video", "publish_id": "published-1"}}
+
+    async def put(_url, chunk, start, total_size):
+        upload_ranges.append((start, len(chunk), total_size))
+
+    monkeypatch.setattr(service, "get_valid_access_token", token)
+    monkeypatch.setattr(service, "get_creator_info", creator)
+    monkeypatch.setattr(service, "_post_json", init)
+    monkeypatch.setattr(service, "_put_bytes", put)
+
+    with SessionLocal() as db:
+        assert asyncio.run(service.upload_video(source, "caption", db=db)) == (None, "published-1")
+    assert upload_ranges == [
+        (0, 10_000_000, 64_000_001),
+        (10_000_000, 10_000_000, 64_000_001),
+        (20_000_000, 10_000_000, 64_000_001),
+        (30_000_000, 10_000_000, 64_000_001),
+        (40_000_000, 10_000_000, 64_000_001),
+        (50_000_000, 14_000_001, 64_000_001),
+    ]
+
+
+def test_tiktok_upload_rejects_empty_video() -> None:
+    """Empty uploads fail before requesting a TikTok upload URL."""
+
+    with pytest.raises(TikTokServiceError, match="empty"):
+        TikTokService._chunk_sizes(0)
+    assert TikTokService._chunk_sizes(4_000_000) == [4_000_000]

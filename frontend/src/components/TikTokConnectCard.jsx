@@ -5,19 +5,21 @@ function TikTokConnectCard({ account, onConnect, connecting, callbackState }) {
         <div>
           <h2 className="text-lg font-semibold text-slate-800">TikTok Account</h2>
           <p className="text-sm text-slate-600">
-            {account.connected
+            {account.mock_mode
+              ? 'Demo mode: no real TikTok post will be created'
+              : account.connected
               ? `Connected${account.open_id ? ` (${account.open_id})` : ''}`
               : 'Not connected yet'}
           </p>
         </div>
-        <button
+        {!account.mock_mode && <button
           type="button"
           onClick={onConnect}
           disabled={connecting}
           className="rounded bg-emerald-600 text-white px-4 py-2 text-sm font-medium disabled:opacity-60"
         >
           {connecting ? 'Redirecting...' : account.connected ? 'Reconnect' : 'Connect TikTok'}
-        </button>
+        </button>}
       </div>
 
       {account.scope && <p className="text-xs text-slate-500">Scopes: {account.scope}</p>}

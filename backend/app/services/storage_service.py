@@ -39,7 +39,7 @@ class StorageService:
 
         self.bucket_name = bucket_name or settings.r2_bucket_name
         self.endpoint_url = endpoint_url or settings.r2_endpoint_url
-        self.public_base_url = public_base_url or settings.r2_public_base_url
+        self.public_base_url = settings.r2_public_base_url if public_base_url is None else public_base_url
         self.access_key_id = access_key_id or settings.r2_access_key_id
         self.secret_access_key = secret_access_key or settings.r2_secret_access_key
         self.region_name = region_name or getattr(settings, "r2_region", "auto")
@@ -53,6 +53,7 @@ class StorageService:
             "R2_ENDPOINT_URL": self.endpoint_url,
             "R2_ACCESS_KEY_ID": self.access_key_id,
             "R2_SECRET_ACCESS_KEY": self.secret_access_key,
+            "R2_PUBLIC_BASE_URL": self.public_base_url,
         }
         missing = [key for key, value in required.items() if not value]
         if missing:
@@ -87,9 +88,7 @@ class StorageService:
         encoded_key = quote(key.lstrip("/"), safe="/")
         if self.public_base_url:
             return f"{self.public_base_url.rstrip('/')}/{encoded_key}"
-        if self.endpoint_url and self.bucket_name:
-            return f"{self.endpoint_url.rstrip('/')}/{self.bucket_name}/{encoded_key}"
-        raise StorageServiceError("Cannot build file URL without endpoint and bucket configuration.")
+        raise StorageServiceError("R2_PUBLIC_BASE_URL is required for browser video previews.")
 
     def _upload_file_sync(self, local_path: Path, key: str) -> None:
         """Synchronous upload helper to execute in thread pool."""
@@ -110,11 +109,12 @@ class StorageService:
     async def upload_file(self, local_path: Path, key: str) -> str:
         """Upload local file to R2 and return accessible URL."""
 
+        public_url = self.get_file_url(key)
         logger.info("Uploading file to storage", extra={"path": str(local_path), "key": key})
         for attempt in range(3):
             try:
                 await asyncio.to_thread(self._upload_file_sync, local_path, key)
-                return self.get_file_url(key)
+                return public_url
             except (BotoCoreError, ClientError, OSError, StorageServiceError) as exc:
                 logger.warning("Storage upload attempt failed (%s/3): %s", attempt + 1, exc)
                 if attempt == 2:

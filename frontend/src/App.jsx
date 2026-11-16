@@ -21,10 +21,10 @@ function App() {
   const [stats, setStats] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState('')
-  const [loginRequired, setLoginRequired] = useState(false)
+  const [loginRequired, setLoginRequired] = useState(() => !sessionStorage.getItem('dashboard_token'))
   const [loginError, setLoginError] = useState('')
 
-  const [account, setAccount] = useState({ connected: false, open_id: null, scope: null, expires_at: null })
+  const [account, setAccount] = useState({ connected: false, mock_mode: false, open_id: null, scope: null, expires_at: null })
   const [connectingTikTok, setConnectingTikTok] = useState(false)
   const [callbackState, setCallbackState] = useState({ message: '', error: false })
 
@@ -49,9 +49,19 @@ function App() {
       setStats(statsRes.data)
       setAccount(accountRes.data)
 
-      await Promise.all(videosRes.data.filter((video) => video.status === 'publishing').map((video) =>
-        checkPublication(video.id).catch(() => null),
-      ))
+      const publishing = videosRes.data.filter((video) => video.status === 'publishing')
+      const checks = await Promise.allSettled(publishing.map((video) => checkPublication(video.id)))
+      const updated = new Map()
+      checks.forEach((check, index) => {
+        if (check.status === 'fulfilled') {
+          updated.set(publishing[index].id, check.value.data)
+        } else if (check.reason?.response?.status !== 409) {
+          setGlobalError('Could not refresh TikTok publication status. The dashboard will retry.')
+        }
+      })
+      if (updated.size) {
+        setVideos(videosRes.data.map((video) => updated.get(video.id) || video))
+      }
 
       const recentVideos = videosRes.data.slice(0, 5)
       await Promise.all(recentVideos.map((video) => fetchJobsForVideo(video.id)))
@@ -61,7 +71,7 @@ function App() {
         setLoginRequired(true)
         return
       }
-      const message = error?.response?.data?.detail || 'Failed to load dashboard data.'
+      const message = error?.response?.data?.detail || 'Cannot reach the API. Check that the backend is running at http://localhost:8000.'
       setGlobalError(String(message))
     }
   }, [fetchJobsForVideo])
@@ -95,9 +105,10 @@ function App() {
       sessionStorage.setItem('dashboard_token', response.data.access_token)
       setLoginRequired(false)
       setLoginError('')
-      await loadData()
+      return true
     } catch (error) {
-      setLoginError(error?.response?.data?.detail || 'Sign in failed.')
+      setLoginError(error?.response?.data?.detail || 'Cannot reach the API. Check http://localhost:8000/health.')
+      return false
     }
   }
 
@@ -144,10 +155,11 @@ function App() {
   }, [loadData])
 
   useEffect(() => {
+    if (loginRequired) return undefined
     loadData()
     const interval = setInterval(loadData, 5000)
     return () => clearInterval(interval)
-  }, [loadData])
+  }, [loadData, loginRequired])
 
   const dashboardProps = useMemo(
     () => ({

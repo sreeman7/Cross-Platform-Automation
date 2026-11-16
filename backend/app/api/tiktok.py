@@ -27,6 +27,10 @@ def get_tiktok_auth_url() -> TikTokAuthUrlResponse:
     """Generate TikTok OAuth authorization URL for frontend redirect."""
 
     service = TikTokService()
+    try:
+        service.assert_oauth_config()
+    except TikTokServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     state = _state_serializer().dumps(secrets.token_urlsafe(16))
     return TikTokAuthUrlResponse(authorization_url=service.get_authorization_url(state), state=state)
 
@@ -64,4 +68,4 @@ def get_tiktok_account_status(db: Session = Depends(get_db)) -> TikTokAccountSta
 
     service = TikTokService()
     status_data = service.get_account_status(db)
-    return TikTokAccountStatusResponse(**status_data)
+    return TikTokAccountStatusResponse(**status_data, mock_mode=settings.tiktok_mock_mode)
