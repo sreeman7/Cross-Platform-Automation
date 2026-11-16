@@ -19,6 +19,7 @@ aiofiles==23.2.1
 
 # Environment
 python-dotenv==1.0.0
+itsdangerous==2.2.0
 
 # Video Processing
 moviepy==1.0.3
