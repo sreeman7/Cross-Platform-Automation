@@ -5,12 +5,24 @@ from pathlib import Path
 
 import pytest
 
-# Ensure tests run against local SQLite instead of external Supabase.
-os.environ.setdefault("DATABASE_URL", f"sqlite:///{Path(__file__).parent / 'test.db'}")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("TIKTOK_MOCK_MODE", "True")
-os.environ.setdefault("OPENAI_API_KEY", "")
-os.environ.setdefault("DEBUG", "True")
+# Tests must not inherit live credentials or authentication from backend/.env.
+os.environ["DATABASE_URL"] = f"sqlite:///{Path(__file__).parent / 'test.db'}"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+os.environ["TIKTOK_MOCK_MODE"] = "True"
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["ADMIN_PASSWORD"] = ""
+os.environ["DEBUG"] = "True"
+for key in (
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET_NAME",
+    "R2_ENDPOINT_URL",
+    "R2_PUBLIC_BASE_URL",
+    "TIKTOK_CLIENT_KEY",
+    "TIKTOK_CLIENT_SECRET",
+    "INSTAGRAM_ACCESS_TOKEN",
+):
+    os.environ[key] = ""
 
 
 @pytest.fixture(autouse=True)
