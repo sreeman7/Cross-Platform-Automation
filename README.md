@@ -85,6 +85,8 @@ cp .env.example .env
 
 Set environment variables in `backend/.env`.
 
+For Upstash, copy the TLS Redis connection URI (`rediss://...`) into `REDIS_URL`. The Upstash REST endpoint (`https://...`) cannot be used as the Celery broker.
+
 Run API:
 
 ```bash
