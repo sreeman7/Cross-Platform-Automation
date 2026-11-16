@@ -23,8 +23,8 @@ def _video() -> int:
         return video.id
 
 
-def test_pipeline_completes_demo_steps(monkeypatch, tmp_path: Path) -> None:
-    """A worker records each completed step and never invents a public post."""
+def test_pipeline_prepares_review_without_publishing(monkeypatch, tmp_path: Path) -> None:
+    """Processing prepares a review record but does not post to TikTok."""
 
     video_id = _video()
 
@@ -43,27 +43,58 @@ def test_pipeline_completes_demo_steps(monkeypatch, tmp_path: Path) -> None:
     async def caption(_self, context_hint):
         return "A clip", ["#demo"]
 
-    async def publish(_self, _path, _caption, db=None):
-        return None, "mock_tiktok_video_id"
-
     monkeypatch.setattr(tasks.InstagramService, "download_video_with_metadata", download)
     monkeypatch.setattr(tasks.VideoProcessor, "process_video", process)
     monkeypatch.setattr(tasks.StorageService, "upload_file", upload)
     monkeypatch.setattr(tasks.AIService, "generate_caption_and_tags", caption)
-    monkeypatch.setattr(tasks.TikTokService, "upload_video", publish)
     monkeypatch.setattr(tasks.settings, "tiktok_mock_mode", True)
 
     result = tasks.process_pipeline_task.apply(args=[video_id], throw=True).get()
-    assert result["status"] == "demo_completed"
+    assert result["status"] == "ready_for_review"
     with SessionLocal() as db:
         video = db.get(Video, video_id)
-        assert video.status == "demo_completed"
+        assert video.status == "ready_for_review"
         assert video.tiktok_url is None
+        assert video.tiktok_video_id is None
         assert video.storage_url == "https://cdn.example/video.mp4"
         assert video.instagram_media_id == "123"
         jobs = db.query(Job).filter(Job.video_id == video_id).all()
-        assert len(jobs) == 6
+        assert len(jobs) == 5
         assert all(job.status == "completed" for job in jobs)
+
+
+def test_publish_task_records_single_upload(monkeypatch) -> None:
+    """Review approval leads to one upload and repeat execution is skipped."""
+
+    video_id = _video()
+    with SessionLocal() as db:
+        video = db.get(Video, video_id)
+        video.status = "publishing"
+        video.storage_url = "https://cdn.example/video.mp4"
+        video.caption = "Reviewed caption"
+        video.hashtags = ["#approved"]
+        db.commit()
+
+    calls = []
+
+    async def download(_self, _key, path):
+        path.write_bytes(b"video")
+        return path
+
+    async def publish(_self, path, caption, db=None):
+        calls.append(caption)
+        return None, "publish-123"
+
+    monkeypatch.setattr(tasks.StorageService, "download_file", download)
+    monkeypatch.setattr(tasks.TikTokService, "upload_video", publish)
+    monkeypatch.setattr(tasks.settings, "tiktok_mock_mode", True)
+
+    result = tasks.publish_video_task.apply(args=[video_id], throw=True).get()
+    assert result["status"] == "demo_completed"
+    assert tasks.publish_video_task.apply(args=[video_id], throw=True).get()["status"] == "skipped"
+    assert calls == ["Reviewed caption #approved"]
+    with SessionLocal() as db:
+        assert db.get(Video, video_id).tiktok_video_id == "publish-123"
 
 
 def test_pipeline_records_failed_download(monkeypatch) -> None:
@@ -134,3 +165,24 @@ def test_tiktok_status_returns_public_url_only_after_post(monkeypatch) -> None:
         monkeypatch.setattr(service, "_post_json", failed)
         with pytest.raises(TikTokServiceError, match="rejected"):
             asyncio.run(service.fetch_publish_status(db, "publish-id"))
+
+
+def test_tiktok_creator_info_required_for_private_post(monkeypatch, tmp_path: Path) -> None:
+    """Direct Post checks creator privacy options before initializing upload."""
+
+    service = TikTokService()
+    service.mock_mode = False
+    source = tmp_path / "video.mp4"
+    source.write_bytes(b"video")
+
+    async def token(_db):
+        return "access"
+
+    async def creator(_token):
+        return {"privacy_level_options": ["PUBLIC_TO_EVERYONE"]}
+
+    monkeypatch.setattr(service, "get_valid_access_token", token)
+    monkeypatch.setattr(service, "get_creator_info", creator)
+    with SessionLocal() as db:
+        with pytest.raises(TikTokServiceError, match="Private posting"):
+            asyncio.run(service.upload_video(source, "caption", db=db))

@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from celery import Task
+from sqlalchemy import update
 
 from app.database import SessionLocal
 from app.models.video import Job, Video
@@ -105,7 +106,6 @@ def _run_download_step(
         service = InstagramService()
         result = asyncio.run(service.download_video_with_metadata(video.instagram_url, output_dir))
 
-        video.local_path = str(result.video_path)
         video.instagram_media_id = result.media_id
         db.add(video)
         db.commit()
@@ -137,7 +137,6 @@ def _run_process_step(
         _set_video_status(db, video, "processing")
         processor = VideoProcessor()
         processed_path = asyncio.run(processor.process_video(source_path, output_dir))
-        video.local_path = str(processed_path)
         db.add(video)
         db.commit()
 
@@ -179,14 +178,13 @@ def _run_upload_step(
         raise
 
 
-def _run_caption_and_publish_step(
+def _run_caption_step(
     db,
     *,
     video: Video,
-    source_path: Path,
     celery_task_id: str | None,
 ) -> None:
-    """Generate caption/hashtags and upload processed media to TikTok."""
+    """Generate editable caption and hashtags before creator review."""
 
     caption_job = _start_job(
         db,
@@ -194,8 +192,6 @@ def _run_caption_and_publish_step(
         task_type="generate_caption",
         celery_task_id=celery_task_id,
     )
-    tiktok_job: Job | None = None
-
     try:
         ai_service = AIService()
         caption, hashtags = asyncio.run(ai_service.generate_caption_and_tags(context_hint=video.instagram_url))
@@ -206,28 +202,52 @@ def _run_caption_and_publish_step(
         db.commit()
 
         _complete_job(db, caption_job)
+    except Exception as exc:
+        _fail_job(db, caption_job, str(exc))
+        raise
 
-        tiktok_job = _start_job(
-            db,
-            video_id=video.id,
-            task_type="upload_tiktok",
-            celery_task_id=celery_task_id,
-        )
-        tiktok_service = TikTokService()
-        tiktok_url, tiktok_video_id = asyncio.run(tiktok_service.upload_video(source_path, caption, db=db))
 
-        video.tiktok_url = tiktok_url
-        video.tiktok_video_id = tiktok_video_id
+@celery_app.task(bind=True, name="app.workers.tasks.publish_video_task")
+def publish_video_task(self: Task, video_id: int) -> dict[str, str | int]:
+    """Publish a reviewed video once; never autoretry an ambiguous upload."""
+
+    db = SessionLocal()
+    job: Job | None = None
+    try:
+        claimed = db.execute(
+            update(Video).where(
+                Video.id == video_id,
+                Video.status == "publishing",
+                Video.tiktok_video_id.is_(None),
+            ).values(status="publishing_in_progress")
+        ).rowcount
+        db.commit()
+        video = db.get(Video, video_id)
+        if not claimed:
+            return {"video_id": video_id, "status": "skipped"}
+
+        job = _start_job(db, video_id=video_id, task_type="upload_tiktok", celery_task_id=self.request.id)
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "processed.mp4"
+            asyncio.run(StorageService().download_file(f"videos/{video_id}/processed.mp4", path))
+            caption = " ".join([video.caption or "", *(video.hashtags or [])]).strip()
+            url, publish_id = asyncio.run(TikTokService().upload_video(path, caption, db=db))
+        video.tiktok_video_id = publish_id
+        video.tiktok_url = url
         db.add(video)
         db.commit()
-
-        _complete_job(db, tiktok_job)
+        _set_video_status(db, video, "demo_completed" if settings.tiktok_mock_mode else "publishing")
+        _complete_job(db, job)
+        return {"video_id": video_id, "status": video.status}
     except Exception as exc:
-        if tiktok_job is None:
-            _fail_job(db, caption_job, str(exc))
-        else:
-            _fail_job(db, tiktok_job, str(exc))
+        logger.exception("Publish task failed for video_id=%s", video_id)
+        video = db.get(Video, video_id)
+        if video:
+            _set_video_status(db, video, "failed", "Publish failed; review job details before retrying")
+        _fail_job(db, job, str(exc))
         raise
+    finally:
+        db.close()
 
 
 @celery_app.task(bind=True, base=BaseTaskWithRetry, name="app.workers.tasks.download_video_task")
@@ -383,17 +403,16 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
                 source_path=processed_path,
                 celery_task_id=self.request.id,
             )
-            _run_caption_and_publish_step(
+            _run_caption_step(
                 db,
                 video=video,
-                source_path=processed_path,
                 celery_task_id=self.request.id,
             )
 
-        _set_video_status(db, video, "demo_completed" if settings.tiktok_mock_mode else "publishing")
+        _set_video_status(db, video, "ready_for_review")
         _complete_job(db, pipeline_job)
 
-        return {"video_id": video_id, "status": video.status}
+        return {"video_id": video_id, "status": "ready_for_review"}
 
     except Exception as exc:
         logger.exception("Pipeline task failed for video_id=%s", video_id)

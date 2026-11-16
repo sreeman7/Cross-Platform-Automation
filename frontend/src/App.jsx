@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import Dashboard from './components/Dashboard'
+import Login from './components/Login'
 import {
   completeTikTokAuth,
   checkPublication,
+  approveVideo,
   createVideo,
   getStats,
   getTikTokAccount,
   getTikTokAuthUrl,
   getVideoJobs,
   getVideos,
+  login,
+  updateVideo,
 } from './services/api'
 
 function App() {
@@ -17,6 +21,8 @@ function App() {
   const [stats, setStats] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState('')
+  const [loginRequired, setLoginRequired] = useState(false)
+  const [loginError, setLoginError] = useState('')
 
   const [account, setAccount] = useState({ connected: false, open_id: null, scope: null, expires_at: null })
   const [connectingTikTok, setConnectingTikTok] = useState(false)
@@ -50,6 +56,11 @@ function App() {
       const recentVideos = videosRes.data.slice(0, 5)
       await Promise.all(recentVideos.map((video) => fetchJobsForVideo(video.id)))
     } catch (error) {
+      if (error?.response?.status === 401) {
+        sessionStorage.removeItem('dashboard_token')
+        setLoginRequired(true)
+        return
+      }
       const message = error?.response?.data?.detail || 'Failed to load dashboard data.'
       setGlobalError(String(message))
     }
@@ -65,6 +76,28 @@ function App() {
       setGlobalError(String(message))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleApprove = async (videoId, caption, hashtags) => {
+    try {
+      await updateVideo(videoId, { caption, hashtags })
+      await approveVideo(videoId)
+      await loadData()
+    } catch (error) {
+      setGlobalError(error?.response?.data?.detail || 'Could not approve video.')
+    }
+  }
+
+  const handleLogin = async (password) => {
+    try {
+      const response = await login(password)
+      sessionStorage.setItem('dashboard_token', response.data.access_token)
+      setLoginRequired(false)
+      setLoginError('')
+      await loadData()
+    } catch (error) {
+      setLoginError(error?.response?.data?.detail || 'Sign in failed.')
     }
   }
 
@@ -128,6 +161,7 @@ function App() {
       callbackState,
       jobsByVideo,
       onLoadJobs: fetchJobsForVideo,
+      onApprove: handleApprove,
       jobsLoadingByVideo,
       globalError,
     }),
@@ -145,6 +179,7 @@ function App() {
     ],
   )
 
+  if (loginRequired) return <Login onLogin={handleLogin} error={loginError} />
   return <Dashboard {...dashboardProps} />
 }
 

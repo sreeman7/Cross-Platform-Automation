@@ -10,6 +10,7 @@ os.environ.setdefault("DATABASE_URL", f"sqlite:///{Path(__file__).parent / 'test
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("TIKTOK_MOCK_MODE", "True")
 os.environ.setdefault("OPENAI_API_KEY", "")
+os.environ.setdefault("DEBUG", "True")
 
 
 @pytest.fixture(autouse=True)

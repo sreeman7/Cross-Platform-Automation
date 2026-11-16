@@ -15,7 +15,7 @@ Why this stands out for internships:
 
 ## Current Status
 
-Current repository status: API, worker pipeline, dashboard, and CI tests are implemented. Live third-party publishing and cloud deployment require account credentials and validation with permitted media.
+Current repository status: API, worker pipeline, protected creator dashboard, review-before-publish flow, database migrations, and CI tests are implemented. Live third-party publishing and cloud deployment require account credentials and validation with permitted media.
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
@@ -85,11 +85,14 @@ cp .env.example .env
 
 Set environment variables in `backend/.env`.
 
+For local development set `DEBUG=True`. For deployment set `DEBUG=False`, `ADMIN_PASSWORD` to a strong unique password, and `SECRET_KEY` to a separate random secret. The API refuses to start in production mode without them. Never commit `.env`.
+
 For Upstash, copy the TLS Redis connection URI (`rediss://...`) into `REDIS_URL`. The Upstash REST endpoint (`https://...`) cannot be used as the Celery broker.
 
 Run API:
 
 ```bash
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
@@ -135,7 +138,7 @@ Notes:
 
 - `backend/tests/conftest.py` forces safe local defaults for test execution.
 - CI enforces `--cov-fail-under=70` on backend tests.
-- Verified locally: 18 backend tests pass with 72% coverage; frontend `npm run build` passes.
+- Verified locally: 22 backend tests pass with more than 73% coverage; frontend `npm run build` passes.
 
 ## Implemented API Endpoints
 
@@ -144,6 +147,8 @@ Notes:
 - `GET /api/videos/{id}`
 - `GET /api/videos/{id}/jobs`
 - `POST /api/videos/{id}/check-publication`
+- `POST /api/videos/{id}/approve`
+- `POST /api/auth/login`
 - `PATCH /api/videos/{id}`
 - `DELETE /api/videos/{id}`
 - `GET /api/stats/summary`
@@ -154,13 +159,13 @@ Notes:
 
 ## Notes on Integrations
 
-Instagram download uses Instaloader for publicly accessible reels; login restrictions and platform changes can block retrieval. R2 upload uses `boto3`. OpenAI captions fall back to a generic caption when no key is configured. TikTok OAuth and upload code exist, but live posting requires app approval, a connected account, permitted media, and validation against TikTok's API. `TIKTOK_MOCK_MODE=True` is a simulated upload and is labeled `demo_completed`; it does not publish anything.
+Instagram download uses Instaloader for publicly accessible reels; login restrictions and platform changes can block retrieval. R2 upload uses `boto3`. OpenAI captions fall back to a generic caption when no key is configured. The pipeline now stops at `ready_for_review`; the creator edits the caption and approves a private TikTok post. TikTok OAuth and upload code exist, but live posting requires app approval, a connected account, permitted media, and validation against TikTok's API. `TIKTOK_MOCK_MODE=True` simulates the final upload and is labeled `demo_completed`; it does not publish anything.
 
 ## Next Milestones
 
-1. Add Alembic migrations for managed schema changes.
-2. Add user authentication and role-based access.
-3. Resolve the creator handle to build a verified public TikTok URL after publication.
+1. Validate the full workflow with creator-owned media and live Instagram, R2, Redis, and TikTok accounts.
+2. Add official Meta account-based ingestion as the reliable alternative to Instaloader.
+3. Add multi-user roles if this grows beyond a single creator account.
 4. Record demo video and add dashboard/API screenshots.
 
 ## Phase 3 Storage Notes
@@ -209,8 +214,10 @@ Instagram download uses Instaloader for publicly accessible reels; login restric
   - upload initialization + binary upload calls
 - Dev-mode option:
   - `TIKTOK_MOCK_MODE=True` simulates upload; no TikTok post is created.
+  - A processed clip waits at `ready_for_review` until the dashboard user explicitly approves a private post.
   - Real upload stays `publishing` until `POST /api/videos/{id}/check-publication` confirms success.
   - TikTok may not provide a public post ID for private posts; the dashboard does not invent a URL.
+  - A failed or interrupted TikTok upload is not retried automatically because doing so could create duplicate posts. Inspect the job and TikTok account before retrying manually.
 
 ## Phase 7 Frontend Notes
 
@@ -233,7 +240,7 @@ Instagram download uses Instaloader for publicly accessible reels; login restric
   - `backend/pytest.ini`
   - `backend/tests/conftest.py` for local-safe env defaults
 - Added deployment config:
-  - `backend/railway.toml` for Dockerfile-based API service with FFmpeg
+  - `backend/railway.toml` for Dockerfile-based API service with FFmpeg and Alembic migration on startup
   - `frontend/vercel.json` for SPA routing
   - `frontend/.env.example` with `VITE_API_URL`
 
@@ -246,6 +253,7 @@ Instagram download uses Instaloader for publicly accessible reels; login restric
 3. Use the `backend/Dockerfile` builder (specified in `backend/railway.toml`).
 4. Use the API start command from `backend/railway.toml`.
 5. Add all required env vars from `backend/.env.example`.
+   Set `DEBUG=False`, `ADMIN_PASSWORD`, and a unique `SECRET_KEY` before exposing the API.
 6. Verify health endpoint:
    - `GET /health`
 
@@ -258,6 +266,8 @@ Instagram download uses Instaloader for publicly accessible reels; login restric
 4. Use the same Dockerfile and override the start command with `celery -A app.workers.celery_app worker --loglevel=info`.
 5. Reuse same env vars as backend API.
 
+For an existing database created by older versions of this project, inspect its schema before applying the initial Alembic migration. The initial migration is intended for a fresh database and may conflict with existing tables.
+
 ### Frontend (Vercel)
 
 1. Import repo into Vercel.
@@ -268,6 +278,8 @@ Instagram download uses Instaloader for publicly accessible reels; login restric
    - `dist`
 5. Add env var:
    - `VITE_API_URL=https://your-backend-domain`
+
+Set `TIKTOK_REDIRECT_URI` on the backend and in the TikTok developer app to the deployed frontend URL, including its trailing slash. See [deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) for the live verification steps.
 
 ## Screenshots
 

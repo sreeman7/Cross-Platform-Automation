@@ -14,6 +14,7 @@ function Dashboard({
   callbackState,
   jobsByVideo,
   onLoadJobs,
+  onApprove,
   jobsLoadingByVideo,
   globalError,
 }) {
@@ -38,6 +39,7 @@ function Dashboard({
         videos={videos}
         jobsByVideo={jobsByVideo}
         onLoadJobs={onLoadJobs}
+        onApprove={onApprove}
         jobsLoadingByVideo={jobsLoadingByVideo}
       />
     </main>

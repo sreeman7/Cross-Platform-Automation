@@ -60,9 +60,11 @@ class VideoListItem(BaseModel):
     id: int
     instagram_url: str
     tiktok_url: str | None
+    storage_url: str | None
     status: str
     caption: str | None
     hashtags: list[str] | None
+    error_message: str | None
     created_at: datetime
 
 
@@ -74,7 +76,10 @@ class StatsSummary(BaseModel):
     downloading: int
     processing: int
     uploading: int
+    ready_for_review: int
+    publishing: int
     completed: int
+    demo_completed: int
     failed: int
 
 

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api import tiktok as tiktok_api
 from app.api import videos as videos_api
+from app.config import settings
 from app.main import app
 
 client = TestClient(app)
@@ -74,6 +75,36 @@ def test_broker_failure_is_visible(monkeypatch) -> None:
     )
     assert response.status_code == 503
     assert "queue unavailable" in response.json()["detail"].lower()
+
+
+def test_review_requires_explicit_approval(monkeypatch) -> None:
+    """Only a prepared video can be approved, and duplicate approval is rejected."""
+
+    from app.database import SessionLocal
+    from app.models.video import Video
+
+    with SessionLocal() as db:
+        video = Video(instagram_url="https://www.instagram.com/reel/REVIEW/", status="ready_for_review",
+                      storage_url="https://cdn.example/video.mp4", caption="Ready")
+        db.add(video)
+        db.commit()
+        video_id = video.id
+
+    monkeypatch.setattr(videos_api.publish_video_task, "delay", lambda _id: SimpleNamespace(id="publish-task"))
+    assert client.post(f"/api/videos/{video_id}/approve").status_code == 200
+    assert client.post(f"/api/videos/{video_id}/approve").status_code == 409
+
+
+def test_admin_login_protects_api(monkeypatch) -> None:
+    """Dashboard API requires a signed token when password protection is enabled."""
+
+    monkeypatch.setattr(settings, "admin_password", "test-password")
+    assert client.get("/api/videos/").status_code == 401
+    assert client.post("/api/auth/login", json={"password": "wrong"}).status_code == 401
+    response = client.post("/api/auth/login", json={"password": "test-password"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    assert client.get("/api/videos/", headers={"Authorization": f"Bearer {token}"}).status_code == 200
 
 
 def test_tiktok_auth_endpoints(monkeypatch) -> None:

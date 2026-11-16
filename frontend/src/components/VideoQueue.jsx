@@ -1,6 +1,6 @@
 import VideoCard from './VideoCard'
 
-function VideoQueue({ videos, jobsByVideo, onLoadJobs, jobsLoadingByVideo }) {
+function VideoQueue({ videos, jobsByVideo, onLoadJobs, onApprove, jobsLoadingByVideo }) {
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-slate-800">Processing Queue</h2>
@@ -14,6 +14,7 @@ function VideoQueue({ videos, jobsByVideo, onLoadJobs, jobsLoadingByVideo }) {
               video={video}
               jobs={jobsByVideo[video.id] || []}
               onLoadJobs={onLoadJobs}
+              onApprove={onApprove}
               jobsLoading={Boolean(jobsLoadingByVideo[video.id])}
             />
           ))

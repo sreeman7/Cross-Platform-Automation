@@ -161,6 +161,16 @@ class TikTokService:
 
         return token.access_token
 
+    async def get_creator_info(self, access_token: str) -> dict:
+        """Fetch creator posting options required before a Direct Post."""
+
+        response = await self._post_json(
+            "/v2/post/publish/creator_info/query/", {}, access_token=access_token
+        )
+        if response.get("error", {}).get("code", "ok") != "ok":
+            raise TikTokServiceError(response["error"].get("message", "Creator info unavailable."))
+        return response.get("data", {})
+
     async def upload_video(self, video_path: Path, caption: str, db: Session | None = None) -> tuple[str | None, str]:
         """Upload a video and return a publish ID; URL is unknown until publication."""
 
@@ -175,6 +185,9 @@ class TikTokService:
             raise TikTokServiceError(f"Video file does not exist: {video_path}")
 
         access_token = await self.get_valid_access_token(db)
+        creator_info = await self.get_creator_info(access_token)
+        if "SELF_ONLY" not in creator_info.get("privacy_level_options", []):
+            raise TikTokServiceError("Private posting is not available for this creator account.")
         video_bytes = await asyncio.to_thread(video_path.read_bytes)
         if not video_bytes:
             raise TikTokServiceError("Video file is empty.")

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.video import Job, Video
 from app.schemas.video import JobResponse, StatsSummary, VideoCreate, VideoListItem, VideoResponse, VideoUpdate
-from app.workers.tasks import process_pipeline_task
+from app.workers.tasks import process_pipeline_task, publish_video_task
 from app.services.tiktok_service import TikTokService, TikTokServiceError
 
 router = APIRouter(prefix="/api", tags=["videos"])
@@ -88,6 +88,31 @@ def get_video_jobs(video_id: int, db: Session = Depends(get_db)) -> list[Job]:
     return db.query(Job).filter(Job.video_id == video_id).order_by(Job.id.asc()).all()
 
 
+@router.post("/videos/{video_id}/approve", response_model=VideoResponse)
+def approve_video(video_id: int, db: Session = Depends(get_db)) -> Video:
+    """Queue TikTok upload only after explicit creator approval."""
+
+    video = db.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.status != "ready_for_review" or video.tiktok_video_id:
+        raise HTTPException(status_code=409, detail="Video is not ready for approval")
+    if not video.storage_url or not video.caption:
+        raise HTTPException(status_code=409, detail="Processed video and caption are required")
+
+    video.status = "publishing"
+    db.commit()
+    try:
+        publish_video_task.delay(video_id)
+    except Exception as exc:
+        video.status = "ready_for_review"
+        db.commit()
+        logger.exception("Could not enqueue TikTok publication for video_id=%s", video_id)
+        raise HTTPException(status_code=503, detail="Task queue unavailable") from exc
+    db.refresh(video)
+    return video
+
+
 @router.post("/videos/{video_id}/check-publication", response_model=VideoResponse)
 def check_publication(video_id: int, db: Session = Depends(get_db)) -> Video:
     """Refresh TikTok publication status after a successful upload."""
@@ -159,6 +184,9 @@ def get_stats_summary(db: Session = Depends(get_db)) -> StatsSummary:
         downloading=counter.get("downloading", 0),
         processing=counter.get("processing", 0),
         uploading=counter.get("uploading", 0),
-        completed=counter.get("completed", 0) + counter.get("demo_completed", 0),
+        ready_for_review=counter.get("ready_for_review", 0),
+        publishing=counter.get("publishing", 0) + counter.get("publishing_in_progress", 0),
+        completed=counter.get("completed", 0),
+        demo_completed=counter.get("demo_completed", 0),
         failed=counter.get("failed", 0),
     )

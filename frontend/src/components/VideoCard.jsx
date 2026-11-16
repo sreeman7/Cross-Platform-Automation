@@ -1,9 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import JobTimeline from './JobTimeline'
 
-function VideoCard({ video, jobs, onLoadJobs, jobsLoading }) {
+function VideoCard({ video, jobs, onLoadJobs, onApprove, jobsLoading }) {
   const [showJobs, setShowJobs] = useState(false)
+  const serverTags = (video.hashtags || []).join(' ')
+  const [caption, setCaption] = useState(video.caption || '')
+  const [tags, setTags] = useState(serverTags)
+  const [approving, setApproving] = useState(false)
+
+  useEffect(() => setCaption(video.caption || ''), [video.caption])
+  useEffect(() => setTags(serverTags), [serverTags])
 
   const toggleJobs = async () => {
     const next = !showJobs
@@ -28,7 +35,34 @@ function VideoCard({ video, jobs, onLoadJobs, jobsLoading }) {
           <span className="font-medium">Caption:</span> {video.caption}
         </p>
       )}
-      {video.status === 'publishing' && (
+      {video.status === 'ready_for_review' && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+          <h3 className="font-semibold text-emerald-950">Review before publishing</h3>
+          {video.storage_url && (
+            <video controls className="w-full max-w-sm rounded bg-black" src={video.storage_url}>
+              Your browser cannot preview this video.
+            </video>
+          )}
+          <label className="block text-sm text-slate-800" htmlFor={`caption-${video.id}`}>Caption</label>
+          <textarea id={`caption-${video.id}`} value={caption} onChange={(event) => setCaption(event.target.value)}
+            maxLength={2200} rows={3} className="w-full rounded border border-slate-300 p-2" />
+          <label className="block text-sm text-slate-800" htmlFor={`tags-${video.id}`}>Hashtags</label>
+          <input id={`tags-${video.id}`} value={tags} onChange={(event) => setTags(event.target.value)}
+            className="w-full rounded border border-slate-300 p-2" />
+          <p className="text-xs text-slate-600">The connected TikTok account will receive this clip as a private post.</p>
+          <button type="button" disabled={approving || !caption.trim()}
+            onClick={async () => {
+              setApproving(true)
+              try { await onApprove(video.id, caption.trim(), tags.split(/\s+/).filter(Boolean)) }
+              finally { setApproving(false) }
+            }}
+            className="rounded bg-emerald-700 px-4 py-2 text-white disabled:opacity-50">
+            {approving ? 'Queuing...' : 'Approve and publish privately'}
+          </button>
+        </div>
+      )}
+      {video.error_message && <p className="text-sm text-rose-700">{video.error_message}</p>}
+      {['publishing', 'publishing_in_progress'].includes(video.status) && (
         <p className="text-sm text-amber-700">Uploaded to TikTok; waiting for publication confirmation.</p>
       )}
       {video.status === 'demo_completed' && (

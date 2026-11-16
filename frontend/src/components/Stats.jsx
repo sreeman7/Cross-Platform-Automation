@@ -3,12 +3,15 @@ function Stats({ stats }) {
     { label: 'Total', value: stats.total_videos ?? 0 },
     { label: 'Pending', value: stats.pending ?? 0 },
     { label: 'Processing', value: (stats.downloading ?? 0) + (stats.processing ?? 0) + (stats.uploading ?? 0) },
+    { label: 'Review', value: stats.ready_for_review ?? 0 },
+    { label: 'Publishing', value: stats.publishing ?? 0 },
     { label: 'Completed', value: stats.completed ?? 0 },
+    { label: 'Simulated', value: stats.demo_completed ?? 0 },
     { label: 'Failed', value: stats.failed ?? 0 },
   ]
 
   return (
-    <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {cards.map((card) => (
         <div key={card.label} className="bg-white rounded-lg shadow p-4">
           <p className="text-xs text-slate-500">{card.label}</p>

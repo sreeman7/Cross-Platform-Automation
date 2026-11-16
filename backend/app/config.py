@@ -9,8 +9,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Social Media Automation API"
-    debug: bool = True
+    debug: bool = False
     secret_key: str = "change-me"
+    admin_password: str = ""
     allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
     database_url: str = "sqlite:///./app.db"
