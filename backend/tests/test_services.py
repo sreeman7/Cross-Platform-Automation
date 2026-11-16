@@ -46,14 +46,13 @@ def test_ai_service_fallback_when_openai_fails(monkeypatch: pytest.MonkeyPatch) 
     assert len(tags) >= 4
 
 
-def test_video_processor_copies_file(tmp_path: Path) -> None:
+def test_video_processor_rejects_invalid_file(tmp_path: Path) -> None:
     input_file = tmp_path / "input.mp4"
     input_file.write_bytes(b"video")
     processor = VideoProcessor()
 
-    output = asyncio.run(processor.process_video(input_file, tmp_path / "processed"))
-    assert output.exists()
-    assert output.read_bytes() == b"video"
+    with pytest.raises(RuntimeError):
+        asyncio.run(processor.process_video(input_file, tmp_path / "processed"))
 
 
 def test_storage_service_returns_url(tmp_path: Path) -> None:
@@ -132,5 +131,5 @@ def test_tiktok_stub_upload(tmp_path: Path) -> None:
     video_path = tmp_path / "clip.mp4"
     video_path.write_bytes(b"video")
     tiktok_url, tiktok_id = asyncio.run(tiktok.upload_video(video_path, "caption"))
-    assert "tiktok.com" in tiktok_url
+    assert tiktok_url is None
     assert tiktok_id

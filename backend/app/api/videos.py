@@ -2,6 +2,7 @@
 
 from collections import Counter
 import logging
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.database import get_db
 from app.models.video import Job, Video
 from app.schemas.video import JobResponse, StatsSummary, VideoCreate, VideoListItem, VideoResponse, VideoUpdate
 from app.workers.tasks import process_pipeline_task
+from app.services.tiktok_service import TikTokService, TikTokServiceError
 
 router = APIRouter(prefix="/api", tags=["videos"])
 logger = logging.getLogger(__name__)
@@ -24,21 +26,26 @@ def create_video(payload: VideoCreate, db: Session = Depends(get_db)) -> Video:
     db.commit()
     db.refresh(video)
 
+    job = Job(video_id=video.id, task_type="process_pipeline", status="pending")
+    db.add(job)
+    db.commit()
+
     try:
         task = process_pipeline_task.delay(video.id)
-        db.add(
-            Job(
-                video_id=video.id,
-                celery_task_id=task.id,
-                task_type="process_pipeline",
-                status="pending",
-            )
-        )
+        job.celery_task_id = task.id
         video.error_message = None
     except Exception as exc:
         logger.warning("Could not enqueue Celery task for video_id=%s: %s", video.id, exc)
-        video.error_message = "Queued in DB, but task broker unavailable. Start Redis/Celery and retry."
+        video.status = "failed"
+        video.error_message = "Task queue unavailable. Please try again later."
+        job.status = "failed"
+        job.error_message = video.error_message
+        db.add(job)
+        db.add(video)
+        db.commit()
+        raise HTTPException(status_code=503, detail=video.error_message) from exc
 
+    db.add(job)
     db.add(video)
     db.commit()
 
@@ -79,6 +86,32 @@ def get_video_jobs(video_id: int, db: Session = Depends(get_db)) -> list[Job]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found")
 
     return db.query(Job).filter(Job.video_id == video_id).order_by(Job.id.asc()).all()
+
+
+@router.post("/videos/{video_id}/check-publication", response_model=VideoResponse)
+def check_publication(video_id: int, db: Session = Depends(get_db)) -> Video:
+    """Refresh TikTok publication status after a successful upload."""
+
+    video = db.get(Video, video_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if video.status != "publishing" or not video.tiktok_video_id:
+        raise HTTPException(status_code=409, detail="Video is not awaiting TikTok publication")
+    try:
+        publication_status, public_url = asyncio.run(
+            TikTokService().fetch_publish_status(db, video.tiktok_video_id)
+        )
+    except TikTokServiceError as exc:
+        video.status = "failed"
+        video.error_message = str(exc)
+        db.commit()
+        raise HTTPException(status_code=502, detail="TikTok publishing failed") from exc
+    if publication_status == "PUBLISH_COMPLETE":
+        video.status = "completed"
+        video.tiktok_url = public_url
+        db.commit()
+        db.refresh(video)
+    return video
 
 
 @router.patch("/videos/{video_id}", response_model=VideoResponse)
@@ -126,6 +159,6 @@ def get_stats_summary(db: Session = Depends(get_db)) -> StatsSummary:
         downloading=counter.get("downloading", 0),
         processing=counter.get("processing", 0),
         uploading=counter.get("uploading", 0),
-        completed=counter.get("completed", 0),
+        completed=counter.get("completed", 0) + counter.get("demo_completed", 0),
         failed=counter.get("failed", 0),
     )

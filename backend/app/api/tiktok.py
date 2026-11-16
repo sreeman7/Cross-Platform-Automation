@@ -5,8 +5,10 @@ from __future__ import annotations
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.schemas.video import TikTokAccountStatusResponse, TikTokAuthUrlResponse, TikTokCallbackResponse
 from app.services.tiktok_service import TikTokService, TikTokServiceError
@@ -14,12 +16,18 @@ from app.services.tiktok_service import TikTokService, TikTokServiceError
 router = APIRouter(prefix="/api/tiktok", tags=["tiktok"])
 
 
+def _state_serializer() -> URLSafeTimedSerializer:
+    """Sign OAuth state with the server secret."""
+
+    return URLSafeTimedSerializer(settings.secret_key, salt="tiktok-oauth-state")
+
+
 @router.get("/auth-url", response_model=TikTokAuthUrlResponse)
 def get_tiktok_auth_url() -> TikTokAuthUrlResponse:
     """Generate TikTok OAuth authorization URL for frontend redirect."""
 
     service = TikTokService()
-    state = secrets.token_urlsafe(16)
+    state = _state_serializer().dumps(secrets.token_urlsafe(16))
     return TikTokAuthUrlResponse(authorization_url=service.get_authorization_url(state), state=state)
 
 
@@ -31,7 +39,10 @@ async def tiktok_callback(
 ) -> TikTokCallbackResponse:
     """Exchange TikTok OAuth code and persist access/refresh tokens."""
 
-    _ = state
+    try:
+        _state_serializer().loads(state, max_age=600)
+    except (BadSignature, SignatureExpired) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired TikTok OAuth state") from exc
     service = TikTokService()
 
     try:

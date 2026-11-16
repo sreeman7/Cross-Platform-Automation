@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import {
   completeTikTokAuth,
+  checkPublication,
   createVideo,
   getStats,
   getTikTokAccount,
@@ -42,6 +43,10 @@ function App() {
       setStats(statsRes.data)
       setAccount(accountRes.data)
 
+      await Promise.all(videosRes.data.filter((video) => video.status === 'publishing').map((video) =>
+        checkPublication(video.id).catch(() => null),
+      ))
+
       const recentVideos = videosRes.data.slice(0, 5)
       await Promise.all(recentVideos.map((video) => fetchJobsForVideo(video.id)))
     } catch (error) {
@@ -68,6 +73,7 @@ function App() {
     setCallbackState({ message: '', error: false })
     try {
       const response = await getTikTokAuthUrl()
+      sessionStorage.setItem('tiktok_oauth_state', response.data.state)
       window.location.href = response.data.authorization_url
     } catch (error) {
       const message = error?.response?.data?.detail || 'Failed to start TikTok OAuth flow.'
@@ -86,18 +92,23 @@ function App() {
       }
 
       try {
+        if (state !== sessionStorage.getItem('tiktok_oauth_state')) {
+          throw new Error('TikTok connection state did not match. Please reconnect.')
+        }
         await completeTikTokAuth(code, state)
         setCallbackState({ message: 'TikTok connected successfully.', error: false })
+        await loadData()
       } catch (error) {
-        const message = error?.response?.data?.detail || 'TikTok callback failed.'
+        const message = error?.response?.data?.detail || error?.message || 'TikTok callback failed.'
         setCallbackState({ message: String(message), error: true })
       } finally {
+        sessionStorage.removeItem('tiktok_oauth_state')
         window.history.replaceState({}, '', window.location.pathname)
       }
     }
 
     processCallback()
-  }, [])
+  }, [loadData])
 
   useEffect(() => {
     loadData()

@@ -28,6 +28,12 @@ function VideoCard({ video, jobs, onLoadJobs, jobsLoading }) {
           <span className="font-medium">Caption:</span> {video.caption}
         </p>
       )}
+      {video.status === 'publishing' && (
+        <p className="text-sm text-amber-700">Uploaded to TikTok; waiting for publication confirmation.</p>
+      )}
+      {video.status === 'demo_completed' && (
+        <p className="text-sm text-slate-600">Demo processing completed. No TikTok post was created.</p>
+      )}
 
       {video.tiktok_url && (
         <a

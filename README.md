@@ -15,7 +15,7 @@ Why this stands out for internships:
 
 ## Current Status
 
-This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, and Phase 8 implementations:
+Current repository status: API, worker pipeline, dashboard, and CI tests are implemented. Live third-party publishing and cloud deployment require account credentials and validation with permitted media.
 
 - FastAPI backend with PostgreSQL-ready SQLAlchemy models
 - REST API for video CRUD + stats summary
@@ -23,7 +23,7 @@ This repository now includes a complete Phase 1 foundation plus Phase 2, Phase 3
 - Service modules for Instagram download (Instaloader-based), video processing, real R2 storage upload/download, AI captions, and TikTok OAuth/upload
 - React + Tailwind dashboard for submitting URLs and monitoring processing status
 - Frontend TikTok connect flow, OAuth callback handling, and per-video job timeline view
-- Initial pytest test suite
+- Backend pytest suite with a 70% CI coverage gate
 - Docker and docker-compose setup
 - CI workflow for backend tests + frontend build
 
@@ -71,6 +71,7 @@ Cross-Platform-Automation/
 - Node.js 18+
 - Redis (local or Upstash)
 - PostgreSQL (local or Supabase)
+- FFmpeg executable (provided by `backend/Dockerfile`)
 
 ## Backend Setup
 
@@ -132,6 +133,7 @@ Notes:
 
 - `backend/tests/conftest.py` forces safe local defaults for test execution.
 - CI enforces `--cov-fail-under=70` on backend tests.
+- Verified locally: 18 backend tests pass with 72% coverage; frontend `npm run build` passes.
 
 ## Implemented API Endpoints
 
@@ -139,6 +141,7 @@ Notes:
 - `GET /api/videos/`
 - `GET /api/videos/{id}`
 - `GET /api/videos/{id}/jobs`
+- `POST /api/videos/{id}/check-publication`
 - `PATCH /api/videos/{id}`
 - `DELETE /api/videos/{id}`
 - `GET /api/stats/summary`
@@ -149,13 +152,13 @@ Notes:
 
 ## Notes on Integrations
 
-Instagram download now uses real shortcode parsing and Instaloader post resolution, then downloads media bytes with retries. Cloudflare R2 storage uses real `boto3` S3-compatible upload/download logic with retries. OpenAI caption generation is implemented with retry + graceful fallback when API/config fails. TikTok OAuth/token handling and upload initialization are implemented for Phase 6.
+Instagram download uses Instaloader for publicly accessible reels; login restrictions and platform changes can block retrieval. R2 upload uses `boto3`. OpenAI captions fall back to a generic caption when no key is configured. TikTok OAuth and upload code exist, but live posting requires app approval, a connected account, permitted media, and validation against TikTok's API. `TIKTOK_MOCK_MODE=True` is a simulated upload and is labeled `demo_completed`; it does not publish anything.
 
 ## Next Milestones
 
 1. Add Alembic migrations for managed schema changes.
 2. Add user authentication and role-based access.
-3. Add TikTok publish-status polling to resolve final public URLs.
+3. Resolve the creator handle to build a verified public TikTok URL after publication.
 4. Record demo video and add dashboard/API screenshots.
 
 ## Phase 3 Storage Notes
@@ -203,7 +206,9 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
   - automatic token refresh
   - upload initialization + binary upload calls
 - Dev-mode option:
-  - `TIKTOK_MOCK_MODE=True` keeps local development/testing unblocked without live TikTok credentials.
+  - `TIKTOK_MOCK_MODE=True` simulates upload; no TikTok post is created.
+  - Real upload stays `publishing` until `POST /api/videos/{id}/check-publication` confirms success.
+  - TikTok may not provide a public post ID for private posts; the dashboard does not invent a URL.
 
 ## Phase 7 Frontend Notes
 
@@ -226,8 +231,8 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
   - `backend/pytest.ini`
   - `backend/tests/conftest.py` for local-safe env defaults
 - Added deployment config:
-  - `railway.toml` for backend service start/health checks
-  - `vercel.json` for frontend static deployment and SPA routing
+  - `backend/railway.toml` for Dockerfile-based API service with FFmpeg
+  - `frontend/vercel.json` for SPA routing
   - `frontend/.env.example` with `VITE_API_URL`
 
 ## Deployment Guide
@@ -236,10 +241,8 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 
 1. Create a Railway service from this repo root.
 2. Set root directory to `backend`.
-3. Build command:
-   - `pip install -r requirements.txt`
-4. Start command:
-   - `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+3. Use the `backend/Dockerfile` builder (specified in `backend/railway.toml`).
+4. Use the API start command from `backend/railway.toml`.
 5. Add all required env vars from `backend/.env.example`.
 6. Verify health endpoint:
    - `GET /health`
@@ -250,8 +253,7 @@ Instagram download now uses real shortcode parsing and Instaloader post resoluti
 2. Set root directory to `backend`.
 3. Build command:
    - `pip install -r requirements.txt`
-4. Start command:
-   - `celery -A app.workers.celery_app worker --loglevel=info`
+4. Use the same Dockerfile and override the start command with `celery -A app.workers.celery_app worker --loglevel=info`.
 5. Reuse same env vars as backend API.
 
 ### Frontend (Vercel)

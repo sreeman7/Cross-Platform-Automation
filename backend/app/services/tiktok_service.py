@@ -70,8 +70,16 @@ class TikTokService:
 
         timeout = httpx.Timeout(120.0, connect=15.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.put(url, content=video_bytes, headers={"Content-Type": "video/mp4"})
+            response = await client.put(url, content=video_bytes, headers={"Content-Type": "video/mp4", "Content-Range": f"bytes 0-{len(video_bytes)-1}/{len(video_bytes)}"})
             response.raise_for_status()
+
+    async def _post_token_form(self, payload: dict) -> dict:
+        """Exchange or refresh tokens using TikTok's form encoded OAuth endpoint."""
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(f"{self.api_base_url}/v2/oauth/token/", data=payload)
+            response.raise_for_status()
+            return response.json()
 
     def _assert_oauth_config(self) -> None:
         """Validate required OAuth configuration before API calls."""
@@ -93,8 +101,8 @@ class TikTokService:
             "redirect_uri": self.redirect_uri,
         }
 
-        response = await self._post_json("/v2/oauth/token/", payload)
-        data = response.get("data", {})
+        response = await self._post_token_form(payload)
+        data = response
         access_token = data.get("access_token")
         if not access_token:
             raise TikTokServiceError("TikTok token exchange did not return access_token.")
@@ -124,8 +132,8 @@ class TikTokService:
             "grant_type": "refresh_token",
             "refresh_token": token.refresh_token,
         }
-        response = await self._post_json("/v2/oauth/token/", payload)
-        data = response.get("data", {})
+        response = await self._post_token_form(payload)
+        data = response
         access_token = data.get("access_token")
         if not access_token:
             raise TikTokServiceError("TikTok token refresh did not return access_token.")
@@ -153,13 +161,13 @@ class TikTokService:
 
         return token.access_token
 
-    async def upload_video(self, video_path: Path, caption: str, db: Session | None = None) -> tuple[str, str]:
-        """Upload a video and return `(tiktok_url, tiktok_video_id)`."""
+    async def upload_video(self, video_path: Path, caption: str, db: Session | None = None) -> tuple[str | None, str]:
+        """Upload a video and return a publish ID; URL is unknown until publication."""
 
         logger.info("Uploading video to TikTok", extra={"video_path": str(video_path)})
         if self.mock_mode:
             video_id = "mock_tiktok_video_id"
-            return f"https://www.tiktok.com/@demo/video/{video_id}", video_id
+            return None, video_id
 
         if db is None:
             raise TikTokServiceError("Database session is required for TikTok token lookup.")
@@ -168,6 +176,8 @@ class TikTokService:
 
         access_token = await self.get_valid_access_token(db)
         video_bytes = await asyncio.to_thread(video_path.read_bytes)
+        if not video_bytes:
+            raise TikTokServiceError("Video file is empty.")
 
         init_payload = {
             "post_info": {"title": caption[:150], "privacy_level": "SELF_ONLY"},
@@ -184,6 +194,8 @@ class TikTokService:
             access_token=access_token,
         )
         init_data = init_response.get("data", {})
+        if init_response.get("error", {}).get("code", "ok") != "ok":
+            raise TikTokServiceError(init_response["error"].get("message", "TikTok rejected upload."))
         upload_url = init_data.get("upload_url")
         publish_id = init_data.get("publish_id") or init_data.get("video_id")
         if not upload_url:
@@ -191,10 +203,23 @@ class TikTokService:
 
         await self._put_bytes(upload_url, video_bytes)
         if not publish_id:
-            publish_id = "unknown_publish_id"
+            raise TikTokServiceError("TikTok did not return a publish ID.")
+        return None, str(publish_id)
 
-        # TikTok publish completion can be async; return publish-id based URL placeholder.
-        return f"https://www.tiktok.com/@me/video/{publish_id}", str(publish_id)
+    async def fetch_publish_status(self, db: Session, publish_id: str) -> tuple[str, str | None]:
+        """Return TikTok publishing state and a public URL when available."""
+
+        token = await self.get_valid_access_token(db)
+        response = await self._post_json(
+            "/v2/post/publish/status/fetch/", {"publish_id": publish_id}, access_token=token
+        )
+        if response.get("error", {}).get("code", "ok") != "ok":
+            raise TikTokServiceError(response["error"].get("message", "TikTok status request failed."))
+        data = response.get("data", {})
+        if data.get("status") == "FAILED":
+            raise TikTokServiceError(data.get("fail_reason", "TikTok publishing failed."))
+        # TikTok returns a post ID but not the creator's handle; avoid fabricating a URL.
+        return data.get("status", "PROCESSING_UPLOAD"), None
 
     def get_account_status(self, db: Session) -> dict[str, str | bool | None]:
         """Return concise token status info for dashboard/auth checks."""

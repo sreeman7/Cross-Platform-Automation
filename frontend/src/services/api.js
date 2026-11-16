@@ -9,6 +9,7 @@ export const createVideo = (instagram_url) => api.post('/api/videos/', { instagr
 export const getVideos = () => api.get('/api/videos/')
 export const getStats = () => api.get('/api/stats/summary')
 export const getVideoJobs = (videoId) => api.get(`/api/videos/${videoId}/jobs`)
+export const checkPublication = (videoId) => api.post(`/api/videos/${videoId}/check-publication`)
 
 export const getTikTokAuthUrl = () => api.get('/api/tiktok/auth-url')
 export const completeTikTokAuth = (code, state) =>

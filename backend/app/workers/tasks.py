@@ -16,6 +16,7 @@ from app.services.ai_service import AIService
 from app.services.instagram_service import InstagramService
 from app.services.storage_service import StorageService
 from app.services.tiktok_service import TikTokService
+from app.config import settings
 from app.services.video_processor import VideoProcessor
 from app.workers.celery_app import celery_app
 
@@ -339,7 +340,6 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
             .filter(
                 Job.video_id == video_id,
                 Job.task_type == "process_pipeline",
-                Job.celery_task_id == self.request.id,
                 Job.status == "pending",
             )
             .order_by(Job.id.desc())
@@ -347,6 +347,7 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
         )
 
         if pending_pipeline_job:
+            pending_pipeline_job.celery_task_id = self.request.id
             pending_pipeline_job.status = "started"
             pending_pipeline_job.started_at = datetime.utcnow()
             db.add(pending_pipeline_job)
@@ -389,10 +390,10 @@ def process_pipeline_task(self: BaseTaskWithRetry, video_id: int) -> dict[str, s
                 celery_task_id=self.request.id,
             )
 
-        _set_video_status(db, video, "completed")
+        _set_video_status(db, video, "demo_completed" if settings.tiktok_mock_mode else "publishing")
         _complete_job(db, pipeline_job)
 
-        return {"video_id": video_id, "status": "completed"}
+        return {"video_id": video_id, "status": video.status}
 
     except Exception as exc:
         logger.exception("Pipeline task failed for video_id=%s", video_id)

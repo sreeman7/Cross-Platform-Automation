@@ -17,7 +17,8 @@ def test_healthcheck() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_video_crud_flow() -> None:
+def test_video_crud_flow(monkeypatch) -> None:
+    monkeypatch.setattr(videos_api.process_pipeline_task, "delay", lambda _id: SimpleNamespace(id="task-crud"))
     create_response = client.post(
         "/api/videos/",
         json={"instagram_url": "https://www.instagram.com/reel/ABC123/"},
@@ -61,6 +62,20 @@ def test_video_jobs_tracking_endpoint(monkeypatch) -> None:
     assert jobs[0]["task_type"] == "process_pipeline"
 
 
+def test_broker_failure_is_visible(monkeypatch) -> None:
+    """Submitting a video reports an unavailable queue instead of leaving it pending."""
+
+    def fail(_video_id):
+        raise ConnectionError("Redis unavailable")
+
+    monkeypatch.setattr(videos_api.process_pipeline_task, "delay", fail)
+    response = client.post(
+        "/api/videos/", json={"instagram_url": "https://www.instagram.com/reel/FAIL123/"}
+    )
+    assert response.status_code == 503
+    assert "queue unavailable" in response.json()["detail"].lower()
+
+
 def test_tiktok_auth_endpoints(monkeypatch) -> None:
     class FakeToken:
         open_id = "open_123"
@@ -76,7 +91,9 @@ def test_tiktok_auth_endpoints(monkeypatch) -> None:
     assert auth_response.status_code == 200
     assert "authorization_url" in auth_response.json()
 
-    callback_response = client.get("/api/tiktok/callback?code=abc123&state=state123")
+    callback_response = client.get(
+        "/api/tiktok/callback", params={"code": "abc123", "state": auth_response.json()["state"]}
+    )
     assert callback_response.status_code == 200
     assert callback_response.json()["connected"] is True
 
